@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { remediationPlans, sources, vulnerabilities } from '../api/resources'
+import { ErrorState, LoadingState, extractErrorMessage } from '../components/DataState'
 
 const SEV_LABEL = { critical: 'Crítica', high: 'Alta', medium: 'Media', low: 'Baja' }
 const SEV_BADGE = { critical: 'b-crit', high: 'b-high', medium: 'b-med', low: 'b-low' }
@@ -12,13 +13,17 @@ export default function Vulnerabilities() {
   const [severity, setSeverity] = useState('')
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [syncing, setSyncing] = useState(false)
+  const [syncError, setSyncError] = useState('')
 
   function load() {
     setLoading(true)
+    setError('')
     vulnerabilities
       .list({ severity: severity || undefined, search: search || undefined })
       .then((res) => setList(res.data.results ?? res.data))
+      .catch((err) => setError(extractErrorMessage(err)))
       .finally(() => setLoading(false))
   }
 
@@ -26,17 +31,24 @@ export default function Vulnerabilities() {
 
   async function handleSync() {
     setSyncing(true)
+    setSyncError('')
     try {
       await sources.sync()
       load()
+    } catch (err) {
+      setSyncError(extractErrorMessage(err))
     } finally {
       setSyncing(false)
     }
   }
 
   async function openDetail(id) {
-    const { data } = await vulnerabilities.retrieve(id)
-    setSelected(data)
+    try {
+      const { data } = await vulnerabilities.retrieve(id)
+      setSelected(data)
+    } catch (err) {
+      setSyncError(extractErrorMessage(err))
+    }
   }
 
   return (
@@ -51,6 +63,12 @@ export default function Vulnerabilities() {
             {syncing ? 'Sincronizando…' : 'Sincronizar fuentes'}
           </button>
         </div>
+
+        {syncError && (
+          <div className="panel" style={{ padding: '8px 12px', marginBottom: 10, color: 'var(--crit)', fontSize: 13 }}>
+            {syncError}
+          </div>
+        )}
 
         <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
           <select value={severity} onChange={(e) => setSeverity(e.target.value)} style={{ border: '1px solid var(--line)', borderRadius: 6, padding: '5px 9px', background: 'var(--surface)' }}>
@@ -69,33 +87,34 @@ export default function Vulnerabilities() {
         </div>
 
         <div className="panel">
-          <table>
-            <thead>
-              <tr>
-                <th>Severidad</th><th>Vulnerabilidad</th><th>Activo</th><th>Prioridad IA</th><th>Estado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && (
-                <tr><td colSpan={5}><div className="empty">Cargando…</div></td></tr>
-              )}
-              {!loading && list.length === 0 && (
-                <tr><td colSpan={5}><div className="empty">Ningún hallazgo coincide con los filtros.</div></td></tr>
-              )}
-              {!loading && list.map((v) => (
-                <tr key={v.id} className={`row ${selected?.id === v.id ? 'sel' : ''}`} onClick={() => openDetail(v.id)}>
-                  <td><span className={`badge ${SEV_BADGE[v.severity]}`}>{SEV_LABEL[v.severity]}</span></td>
-                  <td>
-                    <b style={{ fontWeight: 500, display: 'block' }}>{v.title}</b>
-                    <span className="mono" style={{ color: 'var(--muted)' }}>{v.id.slice(0, 8)} · {v.cve || 'sin CVE'}</span>
-                  </td>
-                  <td>{v.asset_hostname}</td>
-                  <td>{v.priority_score}</td>
-                  <td><span className={`badge ${ST_BADGE[v.status]}`}>{ST_LABEL[v.status]}</span></td>
+          {loading && <LoadingState />}
+          {!loading && error && <ErrorState message={error} onRetry={load} />}
+          {!loading && !error && (
+            <table>
+              <thead>
+                <tr>
+                  <th>Severidad</th><th>Vulnerabilidad</th><th>Activo</th><th>Prioridad IA</th><th>Estado</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {list.length === 0 && (
+                  <tr><td colSpan={5}><div className="empty">Ningún hallazgo coincide con los filtros.</div></td></tr>
+                )}
+                {list.map((v) => (
+                  <tr key={v.id} className={`row ${selected?.id === v.id ? 'sel' : ''}`} onClick={() => openDetail(v.id)}>
+                    <td><span className={`badge ${SEV_BADGE[v.severity]}`}>{SEV_LABEL[v.severity]}</span></td>
+                    <td>
+                      <b style={{ fontWeight: 500, display: 'block' }}>{v.title}</b>
+                      <span className="mono" style={{ color: 'var(--muted)' }}>{v.id.slice(0, 8)} · {v.cve || 'sin CVE'}</span>
+                    </td>
+                    <td>{v.asset_hostname}</td>
+                    <td>{v.priority_score}</td>
+                    <td><span className={`badge ${ST_BADGE[v.status]}`}>{ST_LABEL[v.status]}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
 
@@ -116,14 +135,19 @@ export default function Vulnerabilities() {
 function AiPanel({ vulnerability, onClose, onUpdated }) {
   const [tab, setTab] = useState('ia')
   const [analyzing, setAnalyzing] = useState(false)
+  const [asking, setAsking] = useState('')
   const [reply, setReply] = useState('')
   const [creatingPlan, setCreatingPlan] = useState(false)
+  const [actionError, setActionError] = useState('')
 
   async function handleAnalyze() {
     setAnalyzing(true)
+    setActionError('')
     try {
       const { data } = await vulnerabilities.analyze(vulnerability.id)
       onUpdated(data)
+    } catch (err) {
+      setActionError(extractErrorMessage(err))
     } finally {
       setAnalyzing(false)
     }
@@ -131,12 +155,29 @@ function AiPanel({ vulnerability, onClose, onUpdated }) {
 
   async function handleCreatePlan() {
     setCreatingPlan(true)
+    setActionError('')
     try {
       await remediationPlans.create({ vulnerability: vulnerability.id, owner_name: 'Por asignar' })
       const { data } = await vulnerabilities.retrieve(vulnerability.id)
       onUpdated(data)
+    } catch (err) {
+      setActionError(extractErrorMessage(err))
     } finally {
       setCreatingPlan(false)
+    }
+  }
+
+  async function ask(kind) {
+    setAsking(kind)
+    setActionError('')
+    try {
+      const fn = kind === 'simple' ? vulnerabilities.explainSimple : vulnerabilities.clinicalImpact
+      const { data } = await fn(vulnerability.id)
+      setReply(data.text)
+    } catch (err) {
+      setActionError(extractErrorMessage(err))
+    } finally {
+      setAsking('')
     }
   }
 
@@ -160,6 +201,11 @@ function AiPanel({ vulnerability, onClose, onUpdated }) {
       </div>
 
       <div className="pb" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {actionError && (
+          <div style={{ color: 'var(--crit)', fontSize: 13, background: 'var(--crit-soft)', border: '1px solid var(--crit)', borderRadius: 6, padding: '8px 10px' }}>
+            {actionError}
+          </div>
+        )}
         {tab === 'ia' ? (
           <>
             {vulnerability.ai_analyzed_at ? (
@@ -185,11 +231,11 @@ function AiPanel({ vulnerability, onClose, onUpdated }) {
             <div>
               <h3 style={{ fontSize: 13, margin: '0 0 5px' }}>Preguntar al asistente</h3>
               <div style={{ display: 'flex', gap: 6 }}>
-                <button className="btn sm" onClick={async () => setReply((await vulnerabilities.explainSimple(vulnerability.id)).data.text)}>
-                  Explicar simple
+                <button className="btn sm" disabled={Boolean(asking)} onClick={() => ask('simple')}>
+                  {asking === 'simple' ? 'Pensando…' : 'Explicar simple'}
                 </button>
-                <button className="btn sm" onClick={async () => setReply((await vulnerabilities.clinicalImpact(vulnerability.id)).data.text)}>
-                  Impacto clínico
+                <button className="btn sm" disabled={Boolean(asking)} onClick={() => ask('clinical')}>
+                  {asking === 'clinical' ? 'Pensando…' : 'Impacto clínico'}
                 </button>
               </div>
               {reply && <div style={{ marginTop: 8, background: 'var(--surface2)', border: '1px solid var(--line)', borderRadius: 6, padding: 10 }}>{reply}</div>}

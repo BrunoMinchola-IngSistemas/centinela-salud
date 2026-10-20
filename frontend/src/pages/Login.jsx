@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { extractErrorMessage } from '../components/DataState'
 
 export default function Login() {
   const { login } = useAuth()
@@ -17,16 +18,39 @@ export default function Login() {
     try {
       await login(username, password)
       navigate('/', { replace: true })
-    } catch {
-      setError('Usuario o contraseña incorrectos.')
+    } catch (err) {
+      // 400 del login de DRF es casi siempre credenciales inválidas;
+      // cualquier otra cosa (backend caído, 500, etc.) sí vale la
+      // pena mostrarla tal cual para no hacer perder tiempo buscando
+      // un typo que no existe.
+      if (err.response?.status === 400) {
+        setError('Usuario o contraseña incorrectos.')
+      } else {
+        setError(extractErrorMessage(err))
+      }
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div style={{ height: '100vh', display: 'grid', placeItems: 'center', background: 'var(--bg)' }}>
-      <form onSubmit={handleSubmit} className="panel" style={{ width: 320, padding: 24 }}>
+    <div
+      style={{
+        height: '100vh',
+        display: 'grid',
+        placeItems: 'center',
+        background: 'radial-gradient(1200px 600px at 20% -10%, var(--brand-soft), transparent), var(--bg)',
+      }}
+    >
+      <form onSubmit={handleSubmit} className="panel" style={{ width: 340, padding: 24 }}>
+        <div
+          style={{
+            width: 34, height: 34, borderRadius: 9, background: 'var(--brand)', color: 'var(--brand-ink)',
+            display: 'grid', placeItems: 'center', fontWeight: 700, marginBottom: 10,
+          }}
+        >
+          CS
+        </div>
         <h1 style={{ fontSize: 18, fontWeight: 600, margin: '0 0 4px' }}>Centinela Salud</h1>
         <p style={{ color: 'var(--muted)', margin: '0 0 18px' }}>Consola de vulnerabilidades</p>
         <label style={{ display: 'block', marginBottom: 12 }}>
@@ -51,6 +75,15 @@ export default function Login() {
         <button type="submit" className="btn pri" disabled={loading} style={{ width: '100%', justifyContent: 'center' }}>
           {loading ? 'Ingresando…' : 'Ingresar'}
         </button>
+
+        <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid var(--line)', fontSize: 12, color: 'var(--muted)' }}>
+          <p style={{ margin: '0 0 6px', fontWeight: 500 }}>Cuentas de demostración (clave: demo12345)</p>
+          <ul style={{ margin: 0, paddingLeft: 16, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <li><span className="mono">demo</span> — Analista de seguridad</li>
+            <li><span className="mono">admin_demo</span> — Administrador</li>
+            <li><span className="mono">coordinador_demo</span> — Responsable de TI</li>
+          </ul>
+        </div>
       </form>
     </div>
   )

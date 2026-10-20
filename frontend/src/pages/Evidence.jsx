@@ -1,13 +1,23 @@
 import { useEffect, useState } from 'react'
 import { evidence as evidenceApi } from '../api/resources'
+import { EmptyState, ErrorState, LoadingState, extractErrorMessage } from '../components/DataState'
 
 export default function Evidence() {
   const [list, setList] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
-  useEffect(() => {
-    evidenceApi.list().then((res) => setList(res.data.results ?? res.data)).finally(() => setLoading(false))
-  }, [])
+  function load() {
+    setLoading(true)
+    setError('')
+    evidenceApi
+      .list()
+      .then((res) => setList(res.data.results ?? res.data))
+      .catch((err) => setError(extractErrorMessage(err)))
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(load, [])
 
   return (
     <div>
@@ -16,9 +26,10 @@ export default function Evidence() {
         <p style={{ color: 'var(--muted)', margin: 0 }}>Cada registro guarda su huella SHA-256</p>
       </div>
       <div className="panel">
-        {loading && <div className="empty">Cargando…</div>}
-        {!loading && list.length === 0 && <div className="empty">Aún no hay evidencias generadas.</div>}
-        {!loading && list.length > 0 && (
+        {loading && <LoadingState />}
+        {!loading && error && <ErrorState message={error} onRetry={load} />}
+        {!loading && !error && list.length === 0 && <EmptyState message="Aún no hay evidencias generadas." />}
+        {!loading && !error && list.length > 0 && (
           <table>
             <thead><tr><th>Evidencia</th><th>Vinculada a</th><th>Origen</th><th>Huella SHA-256</th><th>Fecha</th></tr></thead>
             <tbody>

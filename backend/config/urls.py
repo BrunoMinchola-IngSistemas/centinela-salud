@@ -15,6 +15,7 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/auth/login/", obtain_auth_token, name="api-login"),
     path("api/dashboard/summary/", DashboardSummaryView.as_view(), name="dashboard-summary"),
+    path("api/", include("accounts.urls")),
     path("api/", include("assets.urls")),
     path("api/", include("controls.urls")),
     path("api/", include("vulnerabilities.urls")),

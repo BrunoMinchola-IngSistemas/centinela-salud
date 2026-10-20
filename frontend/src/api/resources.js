@@ -9,6 +9,7 @@ import { client } from './client'
 
 export const auth = {
   login: (username, password) => client.post('/api/auth/login/', { username, password }),
+  me: () => client.get('/api/auth/me/'),
 }
 
 export const dashboard = {

@@ -1,23 +1,34 @@
 import { useEffect, useState } from 'react'
 import { controls as controlsApi } from '../api/resources'
+import { EmptyState, ErrorState, LoadingState, extractErrorMessage } from '../components/DataState'
 
 export default function Controls() {
   const [list, setList] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [assessing, setAssessing] = useState(null)
+  const [actionError, setActionError] = useState('')
 
   function load() {
     setLoading(true)
-    controlsApi.list().then((res) => setList(res.data.results ?? res.data)).finally(() => setLoading(false))
+    setError('')
+    controlsApi
+      .list()
+      .then((res) => setList(res.data.results ?? res.data))
+      .catch((err) => setError(extractErrorMessage(err)))
+      .finally(() => setLoading(false))
   }
 
   useEffect(load, [])
 
   async function assess(id) {
     setAssessing(id)
+    setActionError('')
     try {
       await controlsApi.assess(id)
       load()
+    } catch (err) {
+      setActionError(extractErrorMessage(err))
     } finally {
       setAssessing(null)
     }
@@ -29,10 +40,16 @@ export default function Controls() {
         <h1 style={{ fontSize: 20, fontWeight: 600, margin: '0 0 2px' }}>Controles de seguridad</h1>
         <p style={{ color: 'var(--muted)', margin: 0 }}>Cumplimiento calculado a partir de los hallazgos</p>
       </div>
+      {actionError && (
+        <div className="panel" style={{ padding: '8px 12px', marginBottom: 10, color: 'var(--crit)', fontSize: 13 }}>
+          {actionError}
+        </div>
+      )}
       <div className="panel">
-        {loading && <div className="empty">Cargando…</div>}
-        {!loading && list.length === 0 && <div className="empty">Aún no hay controles cargados.</div>}
-        {!loading && list.length > 0 && (
+        {loading && <LoadingState />}
+        {!loading && error && <ErrorState message={error} onRetry={load} />}
+        {!loading && !error && list.length === 0 && <EmptyState message="Aún no hay controles cargados." />}
+        {!loading && !error && list.length > 0 && (
           <table>
             <thead><tr><th>Control</th><th>Cumplimiento</th><th>Brechas</th><th></th></tr></thead>
             <tbody>

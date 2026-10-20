@@ -56,12 +56,7 @@ class Command(BaseCommand):
             name="Clínica San Lucas (demo)", defaults={"ruc": "20123456789"}
         )
 
-        user, created = User.objects.get_or_create(username="demo", defaults={"is_active": True})
-        if created or not user.has_usable_password():
-            user.set_password("demo12345")
-            user.save()
-        Profile.objects.update_or_create(user=user, defaults={"organization": org, "role": Role.ANALYST})
-        token, _ = Token.objects.get_or_create(user=user)
+        demo_users = self._create_users(org)
 
         assets = self._create_assets(org)
         sources = self._create_sources(org)
@@ -69,9 +64,33 @@ class Command(BaseCommand):
         self._create_vulnerabilities(org, assets, sources, controls)
 
         self.stdout.write(self.style.SUCCESS("Datos de demostración listos."))
-        self.stdout.write(f"  Usuario:  demo / demo12345")
-        self.stdout.write(f"  Token:    {token.key}")
         self.stdout.write(f"  Org:      {org.name} ({org.id})")
+        self.stdout.write("  Usuarios (misma clave para los tres: demo12345):")
+        for username, role_label, token in demo_users:
+            self.stdout.write(f"    {username:<18} {role_label:<22} token={token}")
+
+    def _create_users(self, org):
+        """
+        Tres cuentas con roles distintos sobre la misma organización,
+        para poder mostrar casos de uso diferenciados (qué ve un
+        analista vs. un administrador vs. el responsable de TI) sin
+        tener que crear usuarios a mano cada vez.
+        """
+        specs = [
+            ("demo", Role.ANALYST),
+            ("admin_demo", Role.ADMIN),
+            ("coordinador_demo", Role.IT_OWNER),
+        ]
+        created_users = []
+        for username, role in specs:
+            user, created = User.objects.get_or_create(username=username, defaults={"is_active": True})
+            if created or not user.has_usable_password():
+                user.set_password("demo12345")
+                user.save()
+            Profile.objects.update_or_create(user=user, defaults={"organization": org, "role": role})
+            token, _ = Token.objects.get_or_create(user=user)
+            created_users.append((username, Role(role).label, token.key))
+        return created_users
 
     def _create_assets(self, org):
         specs = [

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { dashboard } from '../api/resources'
+import { EmptyState, ErrorState, LoadingState, extractErrorMessage } from '../components/DataState'
 
 const SEV_LABEL = { critical: 'Crítica', high: 'Alta', medium: 'Media', low: 'Baja' }
 const SEV_BADGE = { critical: 'b-crit', high: 'b-high', medium: 'b-med', low: 'b-low' }
@@ -7,16 +8,23 @@ const SEV_BADGE = { critical: 'b-crit', high: 'b-high', medium: 'b-med', low: 'b
 export default function Dashboard() {
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
+  function load() {
+    setLoading(true)
+    setError('')
     dashboard
       .summary()
       .then((res) => setData(res.data))
-      .catch(() => setError('No se pudo cargar el panel general.'))
-  }, [])
+      .catch((err) => setError(extractErrorMessage(err)))
+      .finally(() => setLoading(false))
+  }
 
-  if (error) return <div className="empty">{error}</div>
-  if (!data) return <div className="empty">Cargando…</div>
+  useEffect(load, [])
+
+  if (loading) return <LoadingState label="Cargando panel general…" />
+  if (error) return <ErrorState message={error} onRetry={load} />
+  if (!data) return null
 
   return (
     <div>
@@ -36,7 +44,7 @@ export default function Dashboard() {
         <section className="panel">
           <div className="ph"><h2 style={{ fontSize: 14, margin: 0 }}>Cola priorizada por IA</h2></div>
           <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-            {data.top_priority.length === 0 && <div className="empty">Sin hallazgos abiertos.</div>}
+            {data.top_priority.length === 0 && <EmptyState message="Sin hallazgos abiertos." />}
             {data.top_priority.map((v) => (
               <li key={v.id} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '10px 14px', borderBottom: '1px solid var(--line)' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -53,7 +61,7 @@ export default function Dashboard() {
         <section className="panel">
           <div className="ph"><h2 style={{ fontSize: 14, margin: 0 }}>Controles con mayor brecha</h2></div>
           <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-            {data.control_gaps.length === 0 && <div className="empty">Sin controles cargados.</div>}
+            {data.control_gaps.length === 0 && <EmptyState message="Sin controles cargados." />}
             {data.control_gaps.map((c) => (
               <li key={c.id} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '10px 14px', borderBottom: '1px solid var(--line)' }}>
                 <span style={{ flex: 1 }}>{c.name}</span>

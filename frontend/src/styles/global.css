@@ -57,4 +57,15 @@ tbody tr.row { cursor: pointer; }
 tbody tr.row:hover { background: var(--surface2); }
 tbody tr.sel { background: var(--brand-soft); }
 
-.empty { padding: 26px 16px; text-align: center; color: var(--muted); }
+.empty { padding: 36px 16px; text-align: center; color: var(--muted); display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.state-error { color: var(--crit); }
+.state-icon { width: 30px; height: 30px; border-radius: 999px; display: grid; place-items: center; font-weight: 600; font-size: 15px; background: var(--crit-soft); color: var(--crit); }
+.state-icon-mut { background: var(--surface2); color: var(--muted); border: 1px solid var(--line); }
+.state-loading { color: var(--muted); flex-direction: row; justify-content: center; }
+.spinner { width: 14px; height: 14px; border-radius: 999px; border: 2px solid var(--line); border-top-color: var(--brand); animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.role-badge { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 500; background: var(--brand-soft); color: var(--brand); }
+.user-chip { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.25; margin-right: 4px; }
+.user-chip .uname { font-size: 12.5px; font-weight: 500; }
+.user-chip .urole { font-size: 11px; color: var(--muted); }

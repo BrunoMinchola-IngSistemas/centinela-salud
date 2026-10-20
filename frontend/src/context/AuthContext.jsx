@@ -1,10 +1,26 @@
-import { createContext, useContext, useMemo, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { auth } from '../api/resources'
 
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
   const [token, setToken] = useState(() => localStorage.getItem('centinela_token'))
+  const [profile, setProfile] = useState(null)
+
+  // Quién está conectado (usuario, rol, organización real) se pide
+  // aparte del login: el token por sí solo no dice nada de eso, y
+  // antes la barra superior mostraba "Clínica San Lucas" fijo para
+  // cualquier usuario que entrara.
+  useEffect(() => {
+    if (!token) {
+      setProfile(null)
+      return
+    }
+    auth
+      .me()
+      .then(({ data }) => setProfile(data))
+      .catch(() => setProfile(null))
+  }, [token])
 
   async function login(username, password) {
     const { data } = await auth.login(username, password)
@@ -15,9 +31,13 @@ export function AuthProvider({ children }) {
   function logout() {
     localStorage.removeItem('centinela_token')
     setToken(null)
+    setProfile(null)
   }
 
-  const value = useMemo(() => ({ token, isAuthenticated: Boolean(token), login, logout }), [token])
+  const value = useMemo(
+    () => ({ token, isAuthenticated: Boolean(token), profile, login, logout }),
+    [token, profile],
+  )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
