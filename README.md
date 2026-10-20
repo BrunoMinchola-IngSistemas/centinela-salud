@@ -53,6 +53,50 @@ Cada usuario necesita un perfil (`accounts.User`) ligado a una
 `Organization`; sin eso, la API rechaza las peticiones porque todos
 los datos están aislados por organización (ver `common/mixins.py`).
 
+### Datos de prueba
+
+```bash
+python manage.py seed_demo_data        # crea datos de demo si no existen
+python manage.py seed_demo_data --reset  # los borra y recrea desde cero
+```
+
+Crea el usuario `demo` / `demo12345`, 8 activos, 2 fuentes, 8 controles
+y 6 vulnerabilidades en distintos estados (abierta, en plan, en
+verificación, cerrada), para poder ver la consola con datos realistas
+sin crear todo a mano.
+
+### Pasar de SQLite a PostgreSQL
+
+El backend usa SQLite por defecto para que no haga falta instalar
+nada en desarrollo. Para pasar a PostgreSQL (local, o la RDS de AWS):
+
+1. Instala PostgreSQL si es local, o ten a mano el endpoint de RDS.
+2. Crea la base y el usuario:
+   ```sql
+   CREATE DATABASE centinela;
+   CREATE USER centinela WITH PASSWORD 'elige-una-clave';
+   GRANT ALL PRIVILEGES ON DATABASE centinela TO centinela;
+   ```
+3. En `backend/.env`, completa las variables `POSTGRES_*`:
+   ```
+   POSTGRES_DB=centinela
+   POSTGRES_USER=centinela
+   POSTGRES_PASSWORD=la-clave-que-pusiste
+   POSTGRES_HOST=localhost       # o el endpoint de RDS
+   POSTGRES_PORT=5432
+   ```
+   En cuanto `POSTGRES_DB` deja de estar vacío, `config/settings.py`
+   cambia automáticamente de SQLite a PostgreSQL (ver la función
+   `DATABASES` en ese archivo).
+4. Vuelve a migrar y sembrar los datos de prueba, ahora contra
+   PostgreSQL:
+   ```bash
+   python manage.py migrate
+   python manage.py seed_demo_data
+   ```
+5. El `db.sqlite3` anterior no se borra solo; bórralo a mano si ya no
+   lo necesitas, o déjalo como respaldo local.
+
 ### Integraciones
 
 `integrations/` trae los clientes de Wazuh (API REST), OpenVAS (GMP,

@@ -18,6 +18,25 @@ DUE_DAYS_BY_SEVERITY = {"critical": 7, "high": 30, "medium": 60, "low": 90}
 EVIDENCE_S3_BUCKET = os.getenv("EVIDENCE_S3_BUCKET", "centinela-salud-evidencias")
 
 
+def _parse_bool(value):
+    """
+    bool("false") es True en Python, así que no se puede castear
+    directamente un valor que venga de un formulario o querystring
+    (donde todo llega como texto). Acepta el bool nativo que manda
+    axios/JSON y también las variantes de texto más comunes; devuelve
+    None si no se puede interpretar, para que el caller lo trate como
+    "no vino el campo".
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        if value.strip().lower() in ("true", "1", "yes", "si", "sí"):
+            return True
+        if value.strip().lower() in ("false", "0", "no"):
+            return False
+    return None
+
+
 class RemediationPlanViewSet(viewsets.ModelViewSet):
     queryset = RemediationPlan.objects.select_related("vulnerability", "vulnerability__asset").prefetch_related(
         "verification_attempts"
@@ -78,14 +97,14 @@ class RemediationPlanViewSet(viewsets.ModelViewSet):
         genera un registro de Evidence con su huella SHA-256.
         """
         plan = self.get_object()
-        still_present = request.data.get("vulnerability_still_present")
+        still_present = _parse_bool(request.data.get("vulnerability_still_present"))
         if still_present is None:
             raise serializers.ValidationError("Falta 'vulnerability_still_present' (true/false).")
 
         attempt = VerificationAttempt.objects.create(
             plan=plan,
             requested_by=request.data.get("requested_by", ""),
-            vulnerability_still_present=bool(still_present),
+            vulnerability_still_present=still_present,
             scan_reference=request.data.get("scan_reference", ""),
         )
 
