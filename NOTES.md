@@ -111,18 +111,30 @@ de ahí, no de la espera de 8 horas:
   estilo (`set-state-in-effect`, patrón estándar de fetch-on-mount,
   no es un bug).
 
+**Completado justo después (mismo bloque de trabajo), los dos
+pendientes que quedaban de Ronda 1:**
+- Validación de CVSS (0.0–10.0) y EPSS (0.0–1.0) en
+  `VulnerabilityListSerializer` — el modelo no tenía límites de rango
+  (un `DecimalField` solo restringe cuántos dígitos acepta, no el
+  valor), así que un POST con `cvss_score: 50` se guardaba sin
+  problema. 4 tests nuevos en `VulnerabilityValidationTests`.
+- Tests de los 3 endpoints de IA (`analyze`, `explain_simple`,
+  `clinical_impact`) mockeando `integrations.qwen` con
+  `unittest.mock.patch`, para no depender de que Qwen esté corriendo
+  ni en desarrollo ni en CI. 3 tests nuevos en `AIEndpointsTests`.
+- Total ahora: **23 tests, todos verdes.**
+
 **Pendiente / decisiones para más adelante (no bloqueante):**
 - [ ] La diferenciación de roles hoy es solo visual (badge + enlace
   al admin si es "Administrador"); el backend no limita qué puede
   hacer cada rol todavía (todos los perfiles de la misma organización
   ven los mismos datos). Si se quiere permisos reales por rol, es
   trabajo de otra ronda.
-- [ ] Revisar si el formulario de severidad/CVSS necesita más
-  validación (p. ej. CVSS fuera de 0–10) — sigue pendiente de Ronda 1.
-- [ ] Tests para los endpoints de IA con mock de `integrations.qwen`
-  — sigue pendiente de Ronda 1.
 - [ ] Decidir con Bruno: ¿PostgreSQL ya, o seguir con SQLite por
-  ahora? Ver la guía nueva en el README.
+  ahora? Ver la guía nueva en el README y en GUIA_RAPIDA.md.
+- [ ] Decidir con Bruno: dónde desplegar (hosting gratis/económico
+  para la demo de tesis vs. AWS para producción real) — comparación
+  entregada en el chat el 20 oct.
 
 ## Cómo seguir esto desde cero
 
