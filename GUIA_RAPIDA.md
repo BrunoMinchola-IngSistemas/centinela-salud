@@ -94,5 +94,38 @@ el código a cualquier hosting gratis y ya". Temas a decidir, en orden:
    opción "seria" a largo plazo, pero no tiene capa gratiuta tan
    generosa y pide tarjeta desde el inicio.
 
-Seguimos con el detalle de hosting (gratis vs. económico) en el
-siguiente mensaje de este chat, como dijiste.
+### Comparación de dónde desplegar (para la demo de tesis)
+
+La arquitectura real tiene 3 piezas que viven en lugares distintos:
+**backend (Django)**, **base de datos (PostgreSQL)** y **frontend
+(React ya compilado, son solo archivos estáticos)**. Wazuh/OpenVAS/Qwen
+quedan fuera de esto — para una demo de tesis siguen siendo los datos
+de ejemplo, no hace falta desplegarlos de verdad.
+
+| Opción | Backend + BD | Frontend | Costo | Qué tan fácil |
+|---|---|---|---|---|
+| **Render** (recomendado para empezar) | Web Service (Django) + PostgreSQL, ambos gratis | Static Site, gratis | $0 (con límites: el backend gratis "duerme" tras 15 min sin uso y tarda ~30s en despertar) | Alta — conecta el repo de GitHub y detecta Django solo |
+| **Railway** | Backend + PostgreSQL en el mismo proyecto | Puede ir ahí mismo o en Vercel | ~$5/mes de crédito gratis al mes, luego se cobra uso | Alta — similar a Render, un poco más rápido, menos generoso en el plan gratis |
+| **Fly.io** | Backend en una VM pequeña + PostgreSQL (Fly Postgres) | Se puede servir junto con el backend | Capa gratis pequeña (requiere tarjeta para verificar, aunque no cobra si no te pasas) | Media — más control, un poco más de configuración |
+| **Vercel / Netlify / Cloudflare Pages** | — (no corren Django) | Ideal para el frontend solo | Gratis para proyectos pequeños | Alta |
+| **AWS** (la arquitectura "real" de tu tesis) | EC2/RDS o ECS + RDS PostgreSQL | S3 + CloudFront | Sin capa gratis real para esto (la free tier de 12 meses no alcanza cómodo para RDS + EC2 corriendo todo el tiempo) | Baja — pide tarjeta, más piezas que configurar, pero es lo que tu documento de arquitectura original ya contemplaba |
+
+**Recomendación concreta para la sustentación de tesis:**
+1. **Backend + PostgreSQL → Render** (o Railway). Gratis, y Render
+   detecta un proyecto Django casi sin configurar nada: solo pide el
+   comando de arranque (`gunicorn config.wsgi`) y las variables de
+   `.env`.
+2. **Frontend → Vercel o la misma Render como Static Site**, apuntando
+   `VITE_API_URL` a la URL que te da Render para el backend.
+3. Esto es **para la demo con datos inventados**, no para pacientes
+   reales — no hay tema de HIPAA porque no hay datos reales de nadie.
+   Si en algún momento se usa con pacientes de verdad, ahí sí hay que
+   hablar de un proveedor con garantías (cifrado en reposo, BAA/acuerdo
+   de confidencialidad, backups) — eso ya es otra conversación, para
+   cuando el proyecto pase de tesis a producción real.
+
+No armé los archivos de despliegue (Dockerfile, `render.yaml`, etc.)
+todavía porque eso hay que probarlo contra una cuenta real de Render
+para confirmar que funciona — prefiero no dejarte configuración sin
+probar. Cuando elijas el proveedor, lo hacemos juntos (puede ser aquí
+mismo o en Claude Code con tu Terminal) y lo probamos en vivo.

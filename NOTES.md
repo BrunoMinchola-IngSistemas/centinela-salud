@@ -136,6 +136,31 @@ pendientes que quedaban de Ronda 1:**
   para la demo de tesis vs. AWS para producción real) — comparación
   entregada en el chat el 20 oct.
 
+## Resumen final de esta sesión nocturna (20 oct, ~01:00–02:50 Lima)
+
+Se cubrieron la Ronda 1 completa y la Ronda 2 completa (incluyendo los
+2 pendientes que habían quedado para "la próxima ronda"). Estado:
+**23 tests automatizados, todos verdes; build y lint del frontend sin
+errores; todo subido a GitHub y sincronizado en `D:\Tesis_Obj3`.**
+
+No se programó una Ronda 3 automática. La razón: lo que queda en la
+lista de "Próximos pasos sugeridos" del README (conectar OpenVAS/Wazuh
+reales, desplegar Qwen, pasar a PostgreSQL, elegir dónde hostear) son
+**decisiones que necesitan que Bruno participe** (qué proveedor,
+credenciales, si es local o en la nube) — no son pulido de código que
+se pueda seguir avanzando solo mientras duerme. Seguir "afinando" sin
+una dirección concreta sería inventar trabajo, no ayudar.
+
+Cuando Bruno retome esto, los temas abiertos en orden sugerido son:
+1. Revisar lo nuevo en la consola (3 roles de prueba, mensajes de
+   error reales, barra superior con datos reales).
+2. Decidir hosting para la demo de tesis (comparación en
+   `GUIA_RAPIDA.md`, recomendación: Render o Railway).
+3. Decidir si pasar a PostgreSQL ahora o seguir con SQLite hasta la
+   sustentación (guía paso a paso en `README.md`).
+4. Si quiere seguir iterando con Terminal real (no solo clics), usar
+   Claude Code en su propia compu — pasos en `GUIA_RAPIDA.md` sección 2.
+
 ## Cómo seguir esto desde cero
 
 ```bash
