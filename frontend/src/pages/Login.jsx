@@ -77,11 +77,20 @@ export default function Login() {
         </button>
 
         <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid var(--line)', fontSize: 12, color: 'var(--muted)' }}>
-          <p style={{ margin: '0 0 6px', fontWeight: 500 }}>Cuentas de demostración (clave: demo12345)</p>
-          <ul style={{ margin: 0, paddingLeft: 16, display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <li><span className="mono">demo</span> — Analista de seguridad</li>
-            <li><span className="mono">admin_demo</span> — Administrador</li>
-            <li><span className="mono">coordinador_demo</span> — Responsable de TI</li>
+          <p style={{ margin: '0 0 8px', fontWeight: 500 }}>Cuentas de demostración (clave: demo12345)</p>
+          <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <li style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span className="mono">demo</span>
+              <span className="role-badge role-analyst">Analista de seguridad</span>
+            </li>
+            <li style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span className="mono">admin_demo</span>
+              <span className="role-badge role-admin">Administrador</span>
+            </li>
+            <li style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span className="mono">coordinador_demo</span>
+              <span className="role-badge role-it_owner">Responsable de TI</span>
+            </li>
           </ul>
         </div>
       </form>

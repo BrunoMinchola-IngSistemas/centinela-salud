@@ -64,7 +64,7 @@ export default function AppShell() {
           <div className="user-chip">
             <span className="uname">{profile.username}</span>
             <span className="urole">
-              <span className="role-badge">{profile.role_display}</span>
+              <span className={`role-badge role-${profile.role}`}>{profile.role_display}</span>
             </span>
           </div>
         )}
