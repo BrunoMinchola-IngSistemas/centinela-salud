@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
+import { useAuth } from '../context/AuthContext'
 import { remediationPlans } from '../api/resources'
 import { EmptyState, ErrorState, LoadingState, extractErrorMessage } from '../components/DataState'
 
 export default function Verification() {
+  const { canEdit } = useAuth()
   const [plans, setPlans] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -68,10 +70,10 @@ export default function Verification() {
                   </td>
                   <td>{p.vulnerability_detail?.asset_hostname}</td>
                   <td style={{ textAlign: 'right', display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                    <button className="btn sm" disabled={busy === p.id} onClick={() => verify(p.id, true)}>
+                    <button className="btn sm" disabled={!canEdit || busy === p.id} title={canEdit ? undefined : "Solo lectura (Auditor)"} onClick={() => verify(p.id, true)}>
                       Sigue presente
                     </button>
-                    <button className="btn sm pri" disabled={busy === p.id} onClick={() => verify(p.id, false)}>
+                    <button className="btn sm pri" disabled={!canEdit || busy === p.id} title={canEdit ? undefined : "Solo lectura (Auditor)"} onClick={() => verify(p.id, false)}>
                       Confirmar corregida
                     </button>
                   </td>

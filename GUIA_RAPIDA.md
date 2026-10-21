@@ -3,35 +3,25 @@
 Resumen corto de dónde está todo y qué sigue. Si quieres el detalle
 técnico completo, está en `README.md` y `NOTES.md`.
 
-## 1. Estado actual (20 oct 2026)
+## 1. Estado actual (20 oct 2026, noche)
 
 ✅ Backend (Django) y frontend (React) funcionando juntos en tu compu.
-✅ 3 cuentas de prueba con roles distintos: `demo` (analista),
-   `admin_demo` (admin), `coordinador_demo` (TI) — clave `demo12345`.
-✅ 16 pruebas automáticas, todas verdes.
-✅ Manejo de errores real en las 8 pantallas (ya no se ve "vacío"
-   cuando en realidad algo falló).
+✅ 4 cuentas de prueba (clave `demo12345` para todas), cada rol con su color:
+   `demo` (analista), `admin_demo` (administrador/Gerencia),
+   `coordinador_demo` (TI), `auditor_demo` (auditor: ve todo, no cambia nada).
+✅ Prioridad contextual R1-R5 con explicación de "por qué".
+✅ 31 controles ISO 27001 elegidos para salud (con referencia a ISO 27799)
+   y vínculo automático hallazgo → control.
+✅ Aprobaciones de Gerencia, niveles de autonomía, registro de auditoría
+   que no se puede editar ni borrar, reporte de incidentes en 3 campos.
+✅ PostgreSQL con Row-Level Security listo y probado (opcional en tu PC:
+   sección 3).
+✅ 63 pruebas automáticas, todas verdes.
 ✅ Todo en GitHub: https://github.com/BrunoMinchola-IngSistemas/centinela-salud
-✅ Todo copiado en `D:\Tesis_Obj3`.
-✅ Comparación de hosting en Excel, ya en GitHub (para mandarle a tu
-   compañero de tesis):
-   https://github.com/BrunoMinchola-IngSistemas/centinela-salud/blob/main/docs/Centinela_Salud_Opciones_Hosting.xlsx
-✅ Nuevo: gobernanza de la remediación (niveles de autonomía,
-   solicitudes de aprobación), registro de auditoría a prueba de
-   edición/borrado, y reporte de incidentes del personal (HU23, HU24,
-   HU27, HU30) — 32 pruebas automáticas, todas verdes. Ver
-   `NOTES.md` sección "Ronda 3" para el detalle.
 
-❌ Todavía usa SQLite (una base de datos en un archivo), no
-   PostgreSQL. Ver sección 3.
-❌ Todavía no está en internet — solo corre en tu compu. Ver sección 4.
-❌ Wazuh y OpenVAS reales no están conectados (solo hay datos de
-   ejemplo). Eso es trabajo para más adelante, no urgente ahora.
-❌ De las 30 HU de la tesis, lo nuevo de esta ronda (gobernanza +
-   incidentes) solo existe en la API y en el admin de Django — todavía
-   no tiene pantallas en React. Tampoco están hechos: el catálogo
-   completo de 93 controles ISO 27001 (hoy hay 8 de ejemplo), las
-   reglas de prioridad R1-R5, ni el MFA (segundo factor de login).
+❌ MFA (segundo factor) — decidido dejarlo para después.
+❌ Todavía no está en internet — primero terminar en la PC, luego AWS.
+❌ Wazuh, OpenVAS y Qwen reales no están conectados (datos de ejemplo).
 
 ## 2. Cómo seguir trabajando con terminal real (Claude Code)
 
@@ -67,25 +57,27 @@ Ese repo de GitHub es el punto de encuentro entre esta conversación
 (la nube) y Claude Code (tu compu): lo que yo suba aquí, lo puedes
 bajar ahí con `git pull`, y viceversa.
 
-## 3. Qué falta para la Base de Datos
+## 3. Base de datos: PostgreSQL (paso a paso)
 
-Hoy usas SQLite (un archivo, no un servidor de verdad). Para producción
-necesitas PostgreSQL. Ya dejé la guía paso a paso en el `README.md`
-("Pasar de SQLite a PostgreSQL"). En resumen, necesitas decidir:
+Es la base que eligió tu Benchmarking (sección 3.4). Hasta que la
+instales, todo sigue funcionando con SQLite; no es obligatorio para
+probar la consola.
 
-- **¿Local o en la nube?** Para seguir probando en tu compu, puedes
-  instalar PostgreSQL local (gratis). Para producción, va en la nube
-  (ver sección 4 — normalmente es el mismo proveedor que hostea el
-  backend).
-- **Nombre de base, usuario, clave** — los eliges tú, van en el
-  archivo `.env`, nunca en el código.
-- El resto es automático: con esas 5 variables completas, Django usa
-  PostgreSQL solo.
+1. Instala PostgreSQL 16 o 17 para Windows (postgresql.org > Download >
+   Windows). Puerto 5432. Anota la clave que le pongas a `postgres`.
+2. Abre `docs\postgres_setup.sql`, cambia `cambia-esta-clave` por una
+   clave tuya y córrelo en pgAdmin (Query Tool, conectado como `postgres`).
+3. En `backend\.env` pon `POSTGRES_DB=centinela` y
+   `POSTGRES_PASSWORD=` con la clave del paso 2.
+4. En la terminal del backend:
+   ```
+   python manage.py migrate
+   python manage.py seed_demo_data
+   python manage.py verificar_rls
+   ```
+   Debe terminar con "RLS activo y funcionando.".
 
-**No es urgente hacerlo ya.** SQLite funciona bien para seguir
-desarrollando y para la sustentación de tesis si es una demo local.
-Se vuelve necesario cuando quieras que varias personas usen el sistema
-al mismo tiempo, o cuando lo subas a internet.
+Para volver a SQLite: deja `POSTGRES_DB=` vacío.
 
 ## 4. Desplegar en la nube (dato sensible de salud)
 

@@ -193,3 +193,68 @@ class AIEndpointsTests(APITestCase):
 
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data["text"], "Podría afectar el monitoreo de pacientes.")
+
+
+class PrioridadContextualIntegracionTests(APITestCase):
+    """La prioridad R1-R5 se guarda sola y se recalcula si cambia el activo."""
+
+    def setUp(self):
+        self.org = Organization.objects.create(name="Clínica")
+        self.asset = Asset.objects.create(
+            organization=self.org, hostname="portal", asset_type=AssetType.APPLICATION,
+            criticality=Criticality.HIGH, exposure="interna",
+        )
+        source = VulnerabilitySource.objects.create(organization=self.org, source_type=SourceType.OPENVAS, name="GVM")
+        self.vuln = Vulnerability.objects.create(
+            organization=self.org, asset=self.asset, source=source, external_id="x", title="t",
+            severity=Severity.HIGH, cvss_score=7.5,
+        )
+
+    def test_se_calcula_al_crear(self):
+        self.assertEqual(self.vuln.contextual_priority, "high")
+
+    def test_cambiar_exposicion_del_activo_recalcula(self):
+        self.asset.exposure = "internet"
+        self.asset.save()
+        self.vuln.refresh_from_db()
+        self.assertEqual(self.vuln.contextual_priority, "critical")
+        self.assertEqual(self.vuln.priority_rules["reglas"][0]["regla"], "R1")
+
+
+class EscrituraCruzadaEntreOrganizacionesTests(APITestCase):
+    """Un usuario no puede crear planes ni solicitudes sobre datos de otra clínica (sin depender de RLS)."""
+
+    def setUp(self):
+        from remediation.models import RemediationPlan
+
+        self.org_a = Organization.objects.create(name="A")
+        self.org_b = Organization.objects.create(name="B")
+        self.user_a = User.objects.create_user("a", password="x")
+        Profile.objects.create(user=self.user_a, organization=self.org_a)
+        asset_b = Asset.objects.create(organization=self.org_b, hostname="b", asset_type=AssetType.SERVER)
+        src_b = VulnerabilitySource.objects.create(organization=self.org_b, source_type=SourceType.MANUAL, name="m")
+        self.vuln_b = Vulnerability.objects.create(organization=self.org_b, asset=asset_b, source=src_b, title="b", severity=Severity.HIGH)
+        vuln_b2 = Vulnerability.objects.create(organization=self.org_b, asset=asset_b, source=src_b, external_id="2", title="b2", severity=Severity.HIGH)
+        from django.utils import timezone
+        self.plan_b = RemediationPlan.objects.create(vulnerability=vuln_b2, owner_name="x", due_date=timezone.now().date())
+
+    def test_no_crea_plan_sobre_hallazgo_ajeno(self):
+        self.client.force_authenticate(self.user_a)
+        resp = self.client.post(reverse("remediation-plan-list"), {"vulnerability": self.vuln_b.id, "owner_name": "x"})
+        self.assertEqual(resp.status_code, 400)
+
+    def test_no_crea_solicitud_sobre_plan_ajeno(self):
+        from django.utils import timezone
+        self.client.force_authenticate(self.user_a)
+        resp = self.client.post(reverse("solicitud-aprobacion-list"), {
+            "plan": self.plan_b.id, "tipo_accion": "otro", "riesgo_de_no_actuar": "r", "efecto_esperado": "e",
+            "plazo": timezone.now(),
+        })
+        self.assertEqual(resp.status_code, 400)
+
+    def test_no_crea_activo_ni_hallazgo_apuntando_a_activo_ajeno(self):
+        self.client.force_authenticate(self.user_a)
+        resp = self.client.post(reverse("vulnerability-list"), {
+            "title": "t", "severity": "high", "asset": self.vuln_b.asset_id, "source": self.vuln_b.source_id,
+        })
+        self.assertEqual(resp.status_code, 400)

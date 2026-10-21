@@ -23,7 +23,9 @@ class GovernanceTestsBase(APITestCase):
     def setUp(self):
         self.org = Organization.objects.create(name="Clínica de prueba")
         self.user = User.objects.create_user("analista", password="x")
-        Profile.objects.create(user=self.user, organization=self.org)
+        Profile.objects.create(user=self.user, organization=self.org, role="admin")
+        self.analista = User.objects.create_user("analista2", password="x")
+        Profile.objects.create(user=self.analista, organization=self.org, role="analyst")
 
         self.asset = Asset.objects.create(
             organization=self.org, hostname="srv-1", asset_type=AssetType.SERVER, criticality=Criticality.HIGH
@@ -59,7 +61,7 @@ class PoliticaAutonomiaTests(GovernanceTestsBase):
         )
 
         resp = self.client.get(reverse("politica-autonomia-list"))
-        self.assertEqual(len(resp.data["results"]), 1)
+        self.assertEqual(len(resp.data), 1)
 
 
 class SolicitudAprobacionTests(GovernanceTestsBase):
@@ -153,3 +155,39 @@ class RegistroAuditoriaTests(GovernanceTestsBase):
         registro.accion = "modificado"
         with self.assertRaises(ValueError):
             registro.save()
+
+
+class PermisosGobernanzaTests(GovernanceTestsBase):
+    def test_analista_puede_pedir_pero_no_aprobar(self):
+        self.client.force_authenticate(self.analista)
+        resp = self.client.post(
+            reverse("solicitud-aprobacion-list"),
+            {
+                "plan": self.plan.id,
+                "tipo_accion": TipoAccion.AISLAR_SERVIDOR,
+                "riesgo_de_no_actuar": "r",
+                "efecto_esperado": "e",
+                "plazo": timezone.now() + timezone.timedelta(hours=4),
+            },
+        )
+        self.assertEqual(resp.status_code, 201)
+        resp = self.client.post(reverse("solicitud-aprobacion-aprobar", kwargs={"pk": resp.data["id"]}))
+        self.assertEqual(resp.status_code, 403)
+
+    def test_no_se_decide_dos_veces(self):
+        self.client.force_authenticate(self.user)
+        sol = SolicitudAprobacion.objects.create(
+            plan=self.plan, tipo_accion=TipoAccion.AISLAR_SERVIDOR, riesgo_de_no_actuar="r",
+            efecto_esperado="e", plazo=timezone.now(),
+        )
+        self.assertEqual(self.client.post(reverse("solicitud-aprobacion-aprobar", kwargs={"pk": sol.id})).status_code, 200)
+        self.assertEqual(self.client.post(reverse("solicitud-aprobacion-rechazar", kwargs={"pk": sol.id})).status_code, 400)
+
+    def test_solo_admin_cambia_politicas(self):
+        pol = PoliticaAutonomia.objects.create(organization=self.org, tipo_accion=TipoAccion.APLICAR_PARCHE, nivel=NivelAutonomia.ASISTIDO)
+        self.client.force_authenticate(self.analista)
+        url = reverse("politica-autonomia-detail", kwargs={"pk": pol.id})
+        self.assertEqual(self.client.patch(url, {"nivel": "autonomo"}).status_code, 403)
+        self.client.force_authenticate(self.user)
+        self.assertEqual(self.client.patch(url, {"nivel": "con_aprobacion"}).status_code, 200)
+        self.assertTrue(RegistroAuditoria.objects.filter(accion="politica_autonomia_cambiada").exists())

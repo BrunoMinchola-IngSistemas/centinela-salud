@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from common.serializers import OrganizationScopedRelationsMixin
+
 from vulnerabilities.models import Vulnerability
 from vulnerabilities.serializers import VulnerabilityListSerializer
 
@@ -13,7 +15,7 @@ class VerificationAttemptSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "requested_at"]
 
 
-class RemediationPlanSerializer(serializers.ModelSerializer):
+class RemediationPlanSerializer(OrganizationScopedRelationsMixin, serializers.ModelSerializer):
     vulnerability_detail = VulnerabilityListSerializer(source="vulnerability", read_only=True)
     verification_attempts = VerificationAttemptSerializer(many=True, read_only=True)
     # Opcional al crear: si no se envía, la vista lo calcula a partir

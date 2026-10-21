@@ -34,9 +34,14 @@ export function AuthProvider({ children }) {
     setProfile(null)
   }
 
+  // El Auditor "ve todo pero no hace nada": el backend ya rechaza sus
+  // escrituras con 403; aquí se usa para deshabilitar los botones de
+  // acción en vez de dejarlo apretar y recibir un error.
+  const canEdit = profile?.role !== 'auditor'
+
   const value = useMemo(
-    () => ({ token, isAuthenticated: Boolean(token), profile, login, logout }),
-    [token, profile],
+    () => ({ token, isAuthenticated: Boolean(token), profile, canEdit, login, logout }),
+    [token, profile, canEdit],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

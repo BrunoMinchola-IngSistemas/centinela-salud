@@ -1,9 +1,11 @@
 from rest_framework import serializers
 
+from common.serializers import OrganizationScopedRelationsMixin
+
 from .models import Evidence
 
 
-class EvidenceSerializer(serializers.ModelSerializer):
+class EvidenceSerializer(OrganizationScopedRelationsMixin, serializers.ModelSerializer):
     vulnerability_cve = serializers.CharField(source="vulnerability.cve", read_only=True, default="")
 
     class Meta:

@@ -91,6 +91,10 @@ export default function Login() {
               <span className="mono">coordinador_demo</span>
               <span className="role-badge role-it_owner">Responsable de TI</span>
             </li>
+            <li style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span className="mono">auditor_demo</span>
+              <span className="role-badge role-auditor">Auditor (solo lectura)</span>
+            </li>
           </ul>
         </div>
       </form>

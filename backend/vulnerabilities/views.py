@@ -8,6 +8,8 @@ from rest_framework.response import Response
 from common.mixins import OrganizationScopedMixin
 from integrations import qwen
 from integrations.sync import sync_all_sources
+from governance.audit import registrar
+from governance.models import NivelAutonomia
 
 from .models import Vulnerability, VulnerabilitySource
 from .serializers import (
@@ -54,6 +56,15 @@ class VulnerabilityViewSet(OrganizationScopedMixin, viewsets.ModelViewSet):
                 "priority_score",
                 "ai_analyzed_at",
             ]
+        )
+        registrar(
+            organization=vulnerability.organization,
+            actor="agente",
+            accion="analisis_ia",
+            modalidad=NivelAutonomia.AUTONOMO,
+            objeto_tipo="vulnerability",
+            objeto_id=vulnerability.id,
+            detalle={"pedido_por": request.user.username, "hallazgo": vulnerability.title},
         )
         return Response(VulnerabilityDetailSerializer(vulnerability).data)
 

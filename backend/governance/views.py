@@ -1,10 +1,10 @@
 from django.utils import timezone
 from rest_framework import mixins, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 
+from accounts.models import Role
 from common.mixins import OrganizationScopedMixin
 
 from .audit import registrar
@@ -20,8 +20,28 @@ class PoliticaAutonomiaViewSet(OrganizationScopedMixin, viewsets.ModelViewSet):
     """HU23: qué nivel de autonomía aplica a cada tipo de acción, por organización."""
 
     serializer_class = PoliticaAutonomiaSerializer
-    permission_classes = [IsAuthenticated]
     queryset = PoliticaAutonomia.objects.all()
+    pagination_class = None
+
+    def check_permissions(self, request):
+        super().check_permissions(request)
+        # Cambiar cuánta autonomía tiene el agente es una decisión de
+        # política: solo el Administrador.
+        if request.method not in ("GET", "HEAD", "OPTIONS") and request.user.profile.role != Role.ADMIN:
+            raise PermissionDenied("Solo el rol Administrador puede cambiar las políticas de autonomía.")
+
+    def perform_update(self, serializer):
+        anterior = serializer.instance.nivel
+        politica = serializer.save()
+        registrar(
+            organization=self._organization(),
+            actor=self.request.user.username,
+            accion="politica_autonomia_cambiada",
+            modalidad=politica.nivel,
+            objeto_tipo="politica_autonomia",
+            objeto_id=politica.id,
+            detalle={"tipo_accion": politica.tipo_accion, "de": anterior, "a": politica.nivel},
+        )
 
 
 class SolicitudAprobacionViewSet(viewsets.ModelViewSet):
@@ -37,7 +57,6 @@ class SolicitudAprobacionViewSet(viewsets.ModelViewSet):
     """
 
     serializer_class = SolicitudAprobacionSerializer
-    permission_classes = [IsAuthenticated]
     queryset = SolicitudAprobacion.objects.select_related("plan__vulnerability__organization")
 
     def _organization(self):
@@ -62,7 +81,14 @@ class SolicitudAprobacionViewSet(viewsets.ModelViewSet):
         )
 
     def _decidir(self, request, estado, accion_log):
+        # HU24: la decisión sobre una acción de alto impacto la toma la
+        # dirección (Gerente General), que en el sistema es el rol
+        # Administrador. Un analista o TI puede pedirla, no aprobarla.
+        if request.user.profile.role != Role.ADMIN:
+            raise PermissionDenied("Solo el rol Administrador (Gerencia) puede aprobar o rechazar acciones de alto impacto.")
         solicitud = self.get_object()
+        if solicitud.estado != EstadoSolicitud.PENDIENTE:
+            raise ValidationError({"estado": "Esta solicitud ya fue decidida."})
         solicitud.estado = estado
         solicitud.decidido_por = request.user.username
         solicitud.decidido_en = timezone.now()
@@ -107,5 +133,4 @@ class RegistroAuditoriaViewSet(
     """
 
     serializer_class = RegistroAuditoriaSerializer
-    permission_classes = [IsAuthenticated]
     queryset = RegistroAuditoria.objects.all()

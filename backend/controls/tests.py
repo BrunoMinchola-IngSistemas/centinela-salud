@@ -69,3 +69,49 @@ class ComplianceScoreTests(TestCase):
         v.status = VulnerabilityStatus.CLOSED
         v.save(update_fields=["status"])
         self.assertEqual(ControlSerializer(self.control).data["compliance_score"], 83)  # 80 - 0 + 3
+
+
+class CatalogoIsoTests(TestCase):
+    """HU11: catálogo curado para salud y vínculo automático hallazgo -> control."""
+
+    def setUp(self):
+        from accounts.models import Organization
+        from assets.models import Asset, AssetType, Criticality
+        from vulnerabilities.models import Severity, SourceType, VulnerabilitySource
+
+        self.org = Organization.objects.create(name="Clínica")
+        self.asset = Asset.objects.create(
+            organization=self.org, hostname="srv", asset_type=AssetType.SERVER, criticality=Criticality.HIGH
+        )
+        self.source = VulnerabilitySource.objects.create(organization=self.org, source_type=SourceType.OPENVAS, name="GVM")
+        self.Severity = Severity
+
+    def test_catalogo_incluye_todos_los_controles_de_la_tabla_de_mapeo(self):
+        from controls.catalogo_iso import CONTROLES, MAPEO_CATEGORIA_A_CONTROLES
+
+        codigos = {c[0] for c in CONTROLES}
+        for categoria, mapeados in MAPEO_CATEGORIA_A_CONTROLES.items():
+            for codigo in mapeados:
+                self.assertIn(codigo, codigos, f"{codigo} ({categoria}) falta en el catálogo")
+
+    def test_cargar_catalogo_es_idempotente_y_asigna_tema(self):
+        from controls.models import Control
+        from controls.services import cargar_catalogo
+
+        cargar_catalogo(self.org)
+        n = Control.objects.filter(organization=self.org).count()
+        cargar_catalogo(self.org)
+        self.assertEqual(Control.objects.filter(organization=self.org).count(), n)
+        self.assertEqual(Control.objects.get(organization=self.org, iso_code="8.8").theme, "tecnologico")
+        self.assertEqual(Control.objects.get(organization=self.org, iso_code="6.8").theme, "personas")
+
+    def test_hallazgo_con_categoria_se_vincula_solo_a_sus_controles(self):
+        from controls.services import cargar_catalogo
+        from vulnerabilities.models import Vulnerability
+
+        cargar_catalogo(self.org)
+        v = Vulnerability.objects.create(
+            organization=self.org, asset=self.asset, source=self.source, external_id="1", title="t",
+            severity=self.Severity.HIGH, category="software_desactualizado",
+        )
+        self.assertEqual(sorted(c.iso_code for c in v.controls.all()), ["8.19", "8.32", "8.8"])

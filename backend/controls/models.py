@@ -19,17 +19,34 @@ class Control(models.Model):
     """
 
     organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="controls")
+    iso_code = models.CharField(
+        "Código ISO/IEC 27001:2022", max_length=10, blank=True, help_text="Código del Anexo A, p. ej. '8.8'."
+    )
+    theme = models.CharField(
+        "Tema del Anexo A",
+        max_length=20,
+        blank=True,
+        choices=[
+            ("organizacional", "Organizacionales"),
+            ("personas", "Personas"),
+            ("fisico", "Físicos"),
+            ("tecnologico", "Tecnológicos"),
+        ],
+    )
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
+    health_rationale = models.TextField(
+        "Por qué importa en salud", blank=True, help_text="Referencia temática a ISO 27799 / contexto clínico."
+    )
     baseline_score = models.PositiveSmallIntegerField(
         default=70, help_text="Puntaje base de cumplimiento (0-100) antes de ajustar por hallazgos abiertos/cerrados."
     )
 
     class Meta:
-        ordering = ["name"]
+        ordering = ["iso_code", "name"]
 
     def __str__(self):
-        return self.name
+        return f"{self.iso_code} {self.name}".strip()
 
 
 class ControlMapping(models.Model):

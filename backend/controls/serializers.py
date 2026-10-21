@@ -26,6 +26,7 @@ class ControlSerializer(serializers.ModelSerializer):
     """
 
     mappings = ControlMappingSerializer(many=True, read_only=True)
+    theme_display = serializers.CharField(source="get_theme_display", read_only=True)
     compliance_score = serializers.SerializerMethodField()
     open_findings = serializers.SerializerMethodField()
     latest_assessment = serializers.SerializerMethodField()
@@ -34,8 +35,12 @@ class ControlSerializer(serializers.ModelSerializer):
         model = Control
         fields = [
             "id",
+            "iso_code",
+            "theme",
+            "theme_display",
             "name",
             "description",
+            "health_rationale",
             "baseline_score",
             "mappings",
             "compliance_score",

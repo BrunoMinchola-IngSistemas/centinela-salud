@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from common.serializers import OrganizationScopedRelationsMixin
+
 from .models import PoliticaAutonomia, RegistroAuditoria, SolicitudAprobacion
 
 
@@ -12,7 +14,7 @@ class PoliticaAutonomiaSerializer(serializers.ModelSerializer):
         fields = ["id", "tipo_accion", "tipo_accion_display", "nivel", "nivel_display", "actualizado_en"]
 
 
-class SolicitudAprobacionSerializer(serializers.ModelSerializer):
+class SolicitudAprobacionSerializer(OrganizationScopedRelationsMixin, serializers.ModelSerializer):
     tipo_accion_display = serializers.CharField(source="get_tipo_accion_display", read_only=True)
     estado_display = serializers.CharField(source="get_estado_display", read_only=True)
     vulnerability_title = serializers.CharField(source="plan.vulnerability.title", read_only=True)

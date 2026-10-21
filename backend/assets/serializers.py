@@ -15,6 +15,7 @@ class AssetSerializer(serializers.ModelSerializer):
             "ip_address",
             "operating_system",
             "criticality",
+            "exposure",
             "stores_phi",
             "wazuh_agent_id",
             "wazuh_agent_online",

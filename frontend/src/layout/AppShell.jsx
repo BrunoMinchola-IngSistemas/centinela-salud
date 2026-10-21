@@ -16,9 +16,20 @@ const NAV = [
   {
     group: 'Cumplimiento',
     items: [
-      { to: '/controles', label: 'Controles' },
+      { to: '/controles', label: 'Controles ISO 27001' },
       { to: '/evidencias', label: 'Evidencias' },
     ],
+  },
+  {
+    group: 'Gobernanza',
+    items: [
+      { to: '/gobernanza', label: 'Aprobaciones y autonomía' },
+      { to: '/auditoria', label: 'Registro de auditoría' },
+    ],
+  },
+  {
+    group: 'Personal',
+    items: [{ to: '/incidentes', label: 'Reportar incidente' }],
   },
   {
     group: 'Inventario',
@@ -91,6 +102,11 @@ export default function AppShell() {
       </nav>
 
       <main className="work">
+        {profile?.role === 'auditor' && (
+          <div className="readonly-banner">
+            Modo auditor: puedes ver toda la información de la organización, pero no modificar nada.
+          </div>
+        )}
         <Outlet />
       </main>
     </div>

@@ -65,37 +65,44 @@ y 6 vulnerabilidades en distintos estados (abierta, en plan, en
 verificación, cerrada), para poder ver la consola con datos realistas
 sin crear todo a mano.
 
-### Pasar de SQLite a PostgreSQL
+### Pasar de SQLite a PostgreSQL (con Row-Level Security)
 
-El backend usa SQLite por defecto para que no haga falta instalar
-nada en desarrollo. Para pasar a PostgreSQL (local, o la RDS de AWS):
+El backend usa SQLite por defecto para que no haga falta instalar nada.
+PostgreSQL es la base elegida en el Benchmarking de la tesis (sección
+3.4) sobre todo por **Row-Level Security (RLS)**: el propio motor se
+niega a mostrar filas de otra clínica, aunque el código se olvide de
+filtrar. Está implementado en `backend/common/rls.py` y se activa solo.
 
-1. Instala PostgreSQL si es local, o ten a mano el endpoint de RDS.
-2. Crea la base y el usuario:
-   ```sql
-   CREATE DATABASE centinela;
-   CREATE USER centinela WITH PASSWORD 'elige-una-clave';
-   GRANT ALL PRIVILEGES ON DATABASE centinela TO centinela;
-   ```
-3. En `backend/.env`, completa las variables `POSTGRES_*`:
+1. Instala PostgreSQL 16 o 17 (en Windows: instalador de
+   postgresql.org, deja el puerto 5432 y anota la clave de `postgres`).
+2. Abre `docs/postgres_setup.sql`, cambia `cambia-esta-clave` por una
+   clave tuya y córrelo como `postgres` (pgAdmin > Query Tool, o
+   `psql -U postgres -f docs/postgres_setup.sql`). Crea el usuario
+   `centinela`, el rol restringido `centinela_app` y la base.
+3. En `backend/.env`:
    ```
    POSTGRES_DB=centinela
    POSTGRES_USER=centinela
-   POSTGRES_PASSWORD=la-clave-que-pusiste
-   POSTGRES_HOST=localhost       # o el endpoint de RDS
+   POSTGRES_PASSWORD=la-clave-del-paso-2
+   POSTGRES_HOST=localhost
    POSTGRES_PORT=5432
    ```
-   En cuanto `POSTGRES_DB` deja de estar vacío, `config/settings.py`
-   cambia automáticamente de SQLite a PostgreSQL (ver la función
-   `DATABASES` en ese archivo).
-4. Vuelve a migrar y sembrar los datos de prueba, ahora contra
-   PostgreSQL:
+   Con `POSTGRES_DB` lleno, Django usa PostgreSQL automáticamente.
+4. Migra (esto también crea las políticas RLS), siembra y comprueba:
    ```bash
    python manage.py migrate
    python manage.py seed_demo_data
+   python manage.py verificar_rls
    ```
-5. El `db.sqlite3` anterior no se borra solo; bórralo a mano si ya no
-   lo necesitas, o déjalo como respaldo local.
+   `verificar_rls` debe terminar en "RLS activo y funcionando.".
+5. Para volver a SQLite basta con dejar `POSTGRES_DB=` vacío.
+
+Cómo funciona RLS aquí: Django se conecta como `centinela` (dueño de
+las tablas: migraciones y comandos). En cada petición a la API, tras
+autenticar al usuario, la conexión hace `SET ROLE centinela_app` y
+guarda su organización en `app.current_org`; las políticas solo dejan
+ver y escribir filas de esa organización. El registro de auditoría no
+tiene permisos de UPDATE/DELETE para `centinela_app`.
 
 ### Integraciones
 

@@ -2,6 +2,9 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import AppShell from './layout/AppShell'
 import ProtectedRoute from './ProtectedRoute'
 import Assets from './pages/Assets'
+import AuditLog from './pages/AuditLog'
+import Governance from './pages/Governance'
+import Incidents from './pages/Incidents'
 import Controls from './pages/Controls'
 import Dashboard from './pages/Dashboard'
 import Evidence from './pages/Evidence'
@@ -29,6 +32,9 @@ export default function App() {
         <Route path="controles" element={<Controls />} />
         <Route path="evidencias" element={<Evidence />} />
         <Route path="activos" element={<Assets />} />
+        <Route path="gobernanza" element={<Governance />} />
+        <Route path="auditoria" element={<AuditLog />} />
+        <Route path="incidentes" element={<Incidents />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

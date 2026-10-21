@@ -53,9 +53,11 @@ INSTALLED_APPS = [
     "integrations",
     "governance",
     "incidents",
+    "common",
 ]
 
 MIDDLEWARE = [
+    "common.middleware.ResetRLSMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -73,10 +75,10 @@ REST_FRAMEWORK = {
     "PAGE_SIZE": 25,
     "DEFAULT_FILTER_BACKENDS": ["django_filters.rest_framework.DjangoFilterBackend"],
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework.authentication.SessionAuthentication",
-        "rest_framework.authentication.TokenAuthentication",
+        "common.authentication.RLSSessionAuthentication",
+        "common.authentication.RLSTokenAuthentication",
     ],
-    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
+    "DEFAULT_PERMISSION_CLASSES": ["common.permissions.IsAuthenticatedRoleAware"],
 }
 
 ROOT_URLCONF = "config.urls"

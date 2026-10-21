@@ -1,5 +1,4 @@
 from rest_framework import viewsets
-from rest_framework.permissions import IsAuthenticated
 
 from common.mixins import OrganizationScopedMixin
 from governance.audit import registrar
@@ -13,7 +12,6 @@ class IncidenteReportadoViewSet(OrganizationScopedMixin, viewsets.ModelViewSet):
     """HU30: reportar un incidente con 3 campos (qué, dónde, cuándo)."""
 
     serializer_class = IncidenteReportadoSerializer
-    permission_classes = [IsAuthenticated]
     queryset = IncidenteReportado.objects.all()
 
     def perform_create(self, serializer):

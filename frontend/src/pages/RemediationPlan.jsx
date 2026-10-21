@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useAuth } from '../context/AuthContext'
 import { remediationPlans } from '../api/resources'
 import { ErrorState, LoadingState, extractErrorMessage } from '../components/DataState'
 
@@ -10,6 +11,7 @@ const COLUMNS = [
 ]
 
 export default function RemediationPlan() {
+  const { canEdit } = useAuth()
   const [plans, setPlans] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -72,7 +74,7 @@ export default function RemediationPlan() {
                       <span>{p.owner_name}</span><span>{p.due_date}</span>
                     </div>
                     {(col.key === 'pending' || col.key === 'in_progress') && (
-                      <button className="btn sm" style={{ marginTop: 8, width: '100%', justifyContent: 'center' }} onClick={() => advance(p.id)}>
+                      <button className="btn sm" style={{ marginTop: 8, width: '100%', justifyContent: 'center' }} disabled={!canEdit} title={canEdit ? undefined : "Solo lectura (Auditor)"} onClick={() => advance(p.id)}>
                         {col.key === 'pending' ? 'Iniciar' : 'Enviar a verificación'}
                       </button>
                     )}

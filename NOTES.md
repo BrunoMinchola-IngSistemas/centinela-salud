@@ -248,6 +248,69 @@ necesite una decisión de Bruno o de su asesor):**
   bloqueados por decisiones y recursos reales, no por falta de tiempo
   de esta ronda.
 
+## Ronda 4 — 2026-10-20, noche (decisiones de Bruno sobre la lista de pendientes)
+
+Bruno decidió: (1) empezar PostgreSQL, (2) catálogo ISO solo con lo más
+relevante para salud, (3) implementar R1-R5, (4) MFA ahora no, (5) rol
+Auditor que ve todo pero no hace nada, (6) pantallas nuevas sí,
+(7) AWS después de terminar bien en la PC.
+
+**Hecho:**
+- **Rol Auditor de solo lectura real** (`common/permissions.py`, permiso
+  por defecto de DRF): puede leer todo, cualquier escritura da 403. En
+  la consola ve un aviso amarillo y los botones de acción deshabilitados.
+  Usuario nuevo: `auditor_demo` / `demo12345`.
+- **Permisos de Gerencia**: aprobar/rechazar solicitudes y cambiar
+  niveles de autonomía solo lo puede hacer el Administrador. Una
+  solicitud ya decidida no se puede volver a decidir.
+- **Reglas R1-R5** (`vulnerabilities/priority.py`, módulo puro con 12
+  pruebas unitarias). Campos nuevos: `Asset.exposure` (Internet /
+  perimetral / interna) y `Vulnerability.actively_exploited` (KEV). La
+  prioridad contextual se recalcula sola al guardar un hallazgo o al
+  cambiar el activo, y guarda qué reglas aplicaron y por qué (la consola
+  lo muestra en "Detalle > Por qué esta prioridad").
+  Interpretación tomada en R1 ("mantiene o sube"): sube un nivel. Queda
+  marcada para validar con el asesor (decisión D5 del documento).
+- **Catálogo ISO 27001:2022 para salud** (`controls/catalogo_iso.py`):
+  31 controles = todos los de la tabla de mapeo de la sección 8.5 + 6
+  que ISO 27799 destaca para salud (backups, segregación de red
+  biomédica, continuidad, concienciación, nube, plan de incidentes).
+  Cada control tiene código, tema del Anexo A y "por qué importa en
+  salud". Campo `Vulnerability.category`: al asignarlo, el hallazgo se
+  vincula solo a los controles de la tabla (HU11). Endpoint
+  `/api/controls/por-tema/` con % de cumplimiento por tema (HU13).
+  Comando `python manage.py cargar_catalogo_iso`.
+- **Pantallas nuevas**: Aprobaciones y autonomía, Registro de auditoría,
+  Reportar incidente. Controles muestra código ISO, tema, motivo en
+  salud y tarjetas por tema. Vulnerabilidades muestra prioridad
+  contextual, etiqueta KEV y controles ISO vinculados.
+- **El registro de auditoría ahora se llena con acciones reales**: crear
+  y avanzar planes, verificaciones, análisis con IA, solicitudes,
+  decisiones, cambios de política e incidentes.
+- **PostgreSQL + Row-Level Security** (`common/rls.py`): probado en un
+  PostgreSQL 16 real. Las políticas se aplican solas en cada `migrate`;
+  la API corre cada petición con el rol restringido `centinela_app`; el
+  registro de auditoría no tiene UPDATE/DELETE ni a nivel de motor.
+  `python manage.py verificar_rls` lo demuestra (útil para la
+  sustentación). Script de instalación: `docs/postgres_setup.sql`.
+
+**Bug real encontrado gracias a RLS (y corregido también para SQLite):**
+un usuario de la clínica A podía crear un plan, una solicitud de
+aprobación o un hallazgo apuntando a registros de la clínica B, porque
+los campos relacionados de DRF aceptaban cualquier id existente. Con RLS
+PostgreSQL lo bloqueaba, pero en SQLite pasaba. Ahora
+`common/serializers.py` limita esos campos a la organización del
+usuario. 3 tests nuevos lo cubren.
+
+**Tests:** 63 en SQLite (5 de RLS se saltan porque requieren Postgres) y
+63/63 en PostgreSQL 16 con RLS. Build y lint del frontend sin errores.
+Prueba de punta a punta en navegador sobre PostgreSQL: crear plan,
+reportar incidente, aprobar como Gerencia, auditor en solo lectura.
+
+**Sigue pendiente (a propósito):** MFA (Bruno: "ahora no"), despliegue en
+AWS (después), validar R1-R5 y el catálogo con el asesor, SVM/spaCy,
+LangChain, conexión real a Wazuh/OpenVAS/Qwen.
+
 ## Cómo seguir esto desde cero
 
 ```bash
@@ -272,6 +335,6 @@ npm install
 npm run dev
 ```
 
-Entrar con `demo` / `demo12345` (analista), `admin_demo` /
-`demo12345` (administrador) o `coordinador_demo` / `demo12345`
-(responsable de TI).
+Entrar con `demo` (analista), `admin_demo` (administrador/Gerencia),
+`coordinador_demo` (responsable de TI) o `auditor_demo` (auditor, solo
+lectura). Clave para todos: `demo12345`.

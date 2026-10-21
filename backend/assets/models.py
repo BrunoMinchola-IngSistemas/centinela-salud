@@ -20,6 +20,14 @@ class Criticality(models.TextChoices):
     LOW = "low", "Baja"
 
 
+class Exposure(models.TextChoices):
+    """Exposición de red del activo, usada por las reglas R1-R3 de prioridad contextual."""
+
+    INTERNET = "internet", "Expuesto a Internet"
+    PERIMETRAL = "perimetral", "Perimetral (DMZ)"
+    INTERNA = "interna", "Solo red interna"
+
+
 class Asset(models.Model):
     """
     Un activo descubierto o registrado: servidor, estación, dispositivo
@@ -34,6 +42,9 @@ class Asset(models.Model):
     ip_address = models.GenericIPAddressField(null=True, blank=True)
     operating_system = models.CharField(max_length=150, blank=True)
     criticality = models.CharField(max_length=10, choices=Criticality.choices, default=Criticality.MEDIUM)
+    exposure = models.CharField(
+        "Exposición", max_length=12, choices=Exposure.choices, default=Exposure.INTERNA
+    )
     stores_phi = models.BooleanField(
         "Almacena datos de pacientes (PHI)",
         default=False,
@@ -54,6 +65,13 @@ class Asset(models.Model):
 
     def __str__(self):
         return self.hostname
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        # Si cambia la exposición, criticidad o si guarda datos clínicos,
+        # la prioridad contextual de sus hallazgos cambia (reglas R1-R5).
+        for vuln in self.vulnerabilities.all():
+            vuln.save(update_fields=["contextual_priority", "priority_rules"])
 
     @property
     def open_vulnerability_count(self):

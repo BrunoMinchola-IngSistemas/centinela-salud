@@ -12,6 +12,9 @@ from .serializers import ControlSerializer
 class ControlViewSet(OrganizationScopedMixin, viewsets.ModelViewSet):
     queryset = Control.objects.prefetch_related("mappings", "vulnerabilities", "assessments").all()
     serializer_class = ControlSerializer
+    # El catálogo completo (~31 controles) cabe en una sola página y la
+    # vista de cumplimiento por tema necesita verlos todos juntos.
+    pagination_class = None
 
     @action(detail=True, methods=["post"])
     def assess(self, request, pk=None):
@@ -30,3 +33,25 @@ class ControlViewSet(OrganizationScopedMixin, viewsets.ModelViewSet):
                 "recommendation": assessment.recommendation,
             }
         )
+
+
+def _por_tema(controles):
+    """HU13: % de cumplimiento promedio por tema del Anexo A."""
+    from collections import defaultdict
+
+    acum = defaultdict(list)
+    for c in controles:
+        acum[c["theme_display"] or "Sin tema"].append(c["compliance_score"])
+    return [
+        {"tema": tema, "controles": len(v), "cumplimiento": round(sum(v) / len(v))}
+        for tema, v in sorted(acum.items())
+    ]
+
+
+@action(detail=False, methods=["get"], url_path="por-tema")
+def por_tema(self, request):
+    data = ControlSerializer(self.get_queryset(), many=True).data
+    return Response(_por_tema(data))
+
+
+ControlViewSet.por_tema = por_tema

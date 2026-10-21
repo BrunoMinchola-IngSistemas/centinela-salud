@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
+import { useAuth } from '../context/AuthContext'
 import { remediationPlans, sources, vulnerabilities } from '../api/resources'
 import { ErrorState, LoadingState, extractErrorMessage } from '../components/DataState'
 
-const SEV_LABEL = { critical: 'Crítica', high: 'Alta', medium: 'Media', low: 'Baja' }
-const SEV_BADGE = { critical: 'b-crit', high: 'b-high', medium: 'b-med', low: 'b-low' }
+const SEV_LABEL = { critical: 'Crítica', high: 'Alta', medium: 'Media', low: 'Baja', none: 'Ninguna' }
+const SEV_BADGE = { critical: 'b-crit', high: 'b-high', medium: 'b-med', low: 'b-low', none: 'b-mut' }
 const ST_LABEL = { open: 'Abierta', in_plan: 'En plan', in_verification: 'En verificación', closed: 'Cerrada' }
 const ST_BADGE = { open: 'b-mut', in_plan: 'b-br', in_verification: 'b-med', closed: 'b-ok' }
 
 export default function Vulnerabilities() {
+  const { canEdit } = useAuth()
   const [list, setList] = useState([])
   const [selected, setSelected] = useState(null)
   const [severity, setSeverity] = useState('')
@@ -59,7 +61,7 @@ export default function Vulnerabilities() {
             <h1 style={{ fontSize: 20, fontWeight: 600, margin: '0 0 2px' }}>Vulnerabilidades</h1>
             <p style={{ color: 'var(--muted)', margin: 0 }}>Hallazgos de OpenVAS y Wazuh</p>
           </div>
-          <button className="btn" style={{ marginLeft: 'auto' }} onClick={handleSync} disabled={syncing}>
+          <button className="btn" style={{ marginLeft: 'auto' }} onClick={handleSync} disabled={!canEdit || syncing} title={canEdit ? undefined : "Solo lectura (Auditor)"}>
             {syncing ? 'Sincronizando…' : 'Sincronizar fuentes'}
           </button>
         </div>
@@ -93,7 +95,7 @@ export default function Vulnerabilities() {
             <table>
               <thead>
                 <tr>
-                  <th>Severidad</th><th>Vulnerabilidad</th><th>Activo</th><th>Prioridad IA</th><th>Estado</th>
+                  <th title="Severidad técnica según CVSS">CVSS</th><th title="Severidad ajustada al contexto del activo (reglas R1-R5)">Prioridad contextual</th><th>Vulnerabilidad</th><th>Activo</th><th>Estado</th>
                 </tr>
               </thead>
               <tbody>
@@ -104,11 +106,14 @@ export default function Vulnerabilities() {
                   <tr key={v.id} className={`row ${selected?.id === v.id ? 'sel' : ''}`} onClick={() => openDetail(v.id)}>
                     <td><span className={`badge ${SEV_BADGE[v.severity]}`}>{SEV_LABEL[v.severity]}</span></td>
                     <td>
+                      <span className={`badge ${SEV_BADGE[v.contextual_priority] || 'b-mut'}`}>{SEV_LABEL[v.contextual_priority] || '—'}</span>
+                      {v.actively_exploited && <span className="badge b-crit" style={{ marginLeft: 4 }} title="Explotación activa reportada (CISA KEV)">KEV</span>}
+                    </td>
+                    <td>
                       <b style={{ fontWeight: 500, display: 'block' }}>{v.title}</b>
                       <span className="mono" style={{ color: 'var(--muted)' }}>{v.id.slice(0, 8)} · {v.cve || 'sin CVE'}</span>
                     </td>
                     <td>{v.asset_hostname}</td>
-                    <td>{v.priority_score}</td>
                     <td><span className={`badge ${ST_BADGE[v.status]}`}>{ST_LABEL[v.status]}</span></td>
                   </tr>
                 ))}
@@ -133,6 +138,7 @@ export default function Vulnerabilities() {
 }
 
 function AiPanel({ vulnerability, onClose, onUpdated }) {
+  const { canEdit } = useAuth()
   const [tab, setTab] = useState('ia')
   const [analyzing, setAnalyzing] = useState(false)
   const [asking, setAsking] = useState('')
@@ -224,17 +230,17 @@ function AiPanel({ vulnerability, onClose, onUpdated }) {
                 )}
               </>
             ) : (
-              <button className="btn pri" onClick={handleAnalyze} disabled={analyzing}>
+              <button className="btn pri" onClick={handleAnalyze} disabled={!canEdit || analyzing} title={canEdit ? undefined : "Solo lectura (Auditor)"}>
                 {analyzing ? 'Analizando con Qwen…' : 'Analizar con IA'}
               </button>
             )}
             <div>
               <h3 style={{ fontSize: 13, margin: '0 0 5px' }}>Preguntar al asistente</h3>
               <div style={{ display: 'flex', gap: 6 }}>
-                <button className="btn sm" disabled={Boolean(asking)} onClick={() => ask('simple')}>
+                <button className="btn sm" disabled={!canEdit || Boolean(asking)} title={canEdit ? undefined : "Solo lectura (Auditor)"} onClick={() => ask('simple')}>
                   {asking === 'simple' ? 'Pensando…' : 'Explicar simple'}
                 </button>
-                <button className="btn sm" disabled={Boolean(asking)} onClick={() => ask('clinical')}>
+                <button className="btn sm" disabled={!canEdit || Boolean(asking)} title={canEdit ? undefined : "Solo lectura (Auditor)"} onClick={() => ask('clinical')}>
                   {asking === 'clinical' ? 'Pensando…' : 'Impacto clínico'}
                 </button>
               </div>
@@ -242,12 +248,18 @@ function AiPanel({ vulnerability, onClose, onUpdated }) {
             </div>
           </>
         ) : (
+          <>
           <dl style={{ display: 'grid', gridTemplateColumns: '110px 1fr', gap: '8px 12px', margin: 0 }}>
             <dt style={{ color: 'var(--muted)' }}>CVE</dt><dd className="mono" style={{ margin: 0 }}>{vulnerability.cve || 'Sin CVE'}</dd>
             <dt style={{ color: 'var(--muted)' }}>Activo</dt><dd style={{ margin: 0 }}>{vulnerability.asset_hostname}</dd>
             <dt style={{ color: 'var(--muted)' }}>CVSS</dt><dd style={{ margin: 0 }}>{vulnerability.cvss_score ?? '—'}</dd>
             <dt style={{ color: 'var(--muted)' }}>Fuente</dt><dd style={{ margin: 0 }}>{vulnerability.source_name}</dd>
+            <dt style={{ color: 'var(--muted)' }}>Exposición</dt><dd style={{ margin: 0 }}>{EXPOSURE_LABEL[vulnerability.asset?.exposure] || '—'}</dd>
+            <dt style={{ color: 'var(--muted)' }}>Controles ISO</dt>
+            <dd style={{ margin: 0 }}>{vulnerability.control_codes?.length ? vulnerability.control_codes.join(', ') : '—'}</dd>
           </dl>
+          <PriorityExplanation vulnerability={vulnerability} />
+          </>
         )}
       </div>
 
@@ -255,12 +267,39 @@ function AiPanel({ vulnerability, onClose, onUpdated }) {
         <button
           className="btn pri"
           style={{ width: '100%', justifyContent: 'center' }}
-          disabled={vulnerability.status !== 'open' || creatingPlan}
+          disabled={!canEdit || vulnerability.status !== 'open' || creatingPlan} title={canEdit ? undefined : "Solo lectura (Auditor)"}
           onClick={handleCreatePlan}
         >
           {vulnerability.status === 'open' ? (creatingPlan ? 'Creando…' : 'Crear plan de corrección') : 'Ya tiene plan o está cerrada'}
         </button>
       </div>
     </aside>
+  )
+}
+
+const EXPOSURE_LABEL = { internet: 'Expuesto a Internet', perimetral: 'Perimetral (DMZ)', interna: 'Solo red interna' }
+
+// Explica en lenguaje llano por qué el hallazgo quedó con esa prioridad
+// (el documento pide que cada decisión del agente sea explicable).
+function PriorityExplanation({ vulnerability }) {
+  const info = vulnerability.priority_rules
+  if (!info?.nivel_base) return null
+  return (
+    <div style={{ borderTop: '1px solid var(--line)', paddingTop: 12 }}>
+      <h3 style={{ fontSize: 13, margin: '0 0 6px' }}>Por qué esta prioridad</h3>
+      <p style={{ margin: '0 0 6px', fontSize: 13 }}>
+        CVSS la clasifica como <b>{SEV_LABEL[info.nivel_base]}</b>; con el contexto del activo queda en{' '}
+        <span className={`badge ${SEV_BADGE[info.nivel_final]}`}>{SEV_LABEL[info.nivel_final]}</span>.
+      </p>
+      {info.reglas.length === 0 ? (
+        <p style={{ margin: 0, color: 'var(--muted)', fontSize: 13 }}>Ninguna regla de contexto aplicó.</p>
+      ) : (
+        <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, display: 'flex', flexDirection: 'column', gap: 3 }}>
+          {info.reglas.map((r, i) => (
+            <li key={i}><b className="mono">{r.regla}</b> — {r.explicacion}</li>
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }

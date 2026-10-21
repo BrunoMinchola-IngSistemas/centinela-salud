@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from common.serializers import OrganizationScopedRelationsMixin
+
 from assets.serializers import AssetSerializer
 
 from .models import Vulnerability, VulnerabilitySource
@@ -11,12 +13,14 @@ class VulnerabilitySourceSerializer(serializers.ModelSerializer):
         fields = ["id", "source_type", "name", "is_active", "last_sync_at", "last_sync_ok"]
 
 
-class VulnerabilityListSerializer(serializers.ModelSerializer):
+class VulnerabilityListSerializer(OrganizationScopedRelationsMixin, serializers.ModelSerializer):
     """Versión liviana para la tabla principal (sin descripción larga ni pasos de IA)."""
 
     asset_hostname = serializers.CharField(source="asset.hostname", read_only=True)
     source_name = serializers.CharField(source="source.get_source_type_display", read_only=True)
     is_overdue = serializers.ReadOnlyField()
+    contextual_priority = serializers.CharField(read_only=True)
+    priority_rules = serializers.JSONField(read_only=True)
 
     class Meta:
         model = Vulnerability
@@ -28,6 +32,10 @@ class VulnerabilityListSerializer(serializers.ModelSerializer):
             "cvss_score",
             "epss_score",
             "priority_score",
+            "category",
+            "actively_exploited",
+            "contextual_priority",
+            "priority_rules",
             "status",
             "due_date",
             "is_overdue",
@@ -60,6 +68,12 @@ class VulnerabilityDetailSerializer(VulnerabilityListSerializer):
 
     asset = AssetSerializer(read_only=True)
     control_ids = serializers.PrimaryKeyRelatedField(source="controls", many=True, read_only=True)
+    control_codes = serializers.SerializerMethodField()
+    category_display = serializers.CharField(source="get_category_display", read_only=True)
+
+    def get_control_codes(self, obj):
+        codes = [c.iso_code for c in obj.controls.all() if c.iso_code]
+        return sorted(codes, key=lambda x: tuple(int(p) for p in x.split(".")))
 
     class Meta(VulnerabilityListSerializer.Meta):
         fields = VulnerabilityListSerializer.Meta.fields + [
@@ -69,6 +83,8 @@ class VulnerabilityDetailSerializer(VulnerabilityListSerializer):
             "ai_rollback_risk",
             "ai_analyzed_at",
             "control_ids",
+            "control_codes",
+            "category_display",
             "first_detected_at",
             "last_seen_at",
             "closed_at",

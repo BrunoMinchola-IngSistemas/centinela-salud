@@ -9,6 +9,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from evidence.models import Evidence, EvidenceType
+from governance.audit import registrar
+from governance.models import NivelAutonomia
 from vulnerabilities.models import VulnerabilityStatus
 
 from .models import PlanStatus, RemediationPlan, VerificationAttempt
@@ -64,6 +66,15 @@ class RemediationPlanViewSet(viewsets.ModelViewSet):
         plan = serializer.save(due_date=due_date)
         vulnerability.status = VulnerabilityStatus.IN_PLAN
         vulnerability.save(update_fields=["status"])
+        registrar(
+            organization=vulnerability.organization,
+            actor=self.request.user.username,
+            accion="plan_creado",
+            modalidad=NivelAutonomia.ASISTIDO,
+            objeto_tipo="vulnerability",
+            objeto_id=vulnerability.id,
+            detalle={"titulo": vulnerability.title, "prioridad": vulnerability.contextual_priority, "plazo": str(due_date)},
+        )
         return plan
 
     @action(detail=True, methods=["patch"], url_path="advance")
@@ -78,6 +89,15 @@ class RemediationPlanViewSet(viewsets.ModelViewSet):
             raise serializers.ValidationError("Este plan ya no se puede avanzar manualmente; usa /verify.")
         plan.status = next_status
         plan.save(update_fields=["status"])
+        registrar(
+            organization=plan.vulnerability.organization,
+            actor=request.user.username,
+            accion="plan_avanzado",
+            modalidad=NivelAutonomia.ASISTIDO,
+            objeto_tipo="remediation_plan",
+            objeto_id=plan.id,
+            detalle={"a": next_status, "hallazgo": plan.vulnerability.title},
+        )
         if next_status == PlanStatus.IN_VERIFICATION:
             plan.vulnerability.status = VulnerabilityStatus.IN_VERIFICATION
             plan.vulnerability.save(update_fields=["status"])
@@ -109,6 +129,15 @@ class RemediationPlanViewSet(viewsets.ModelViewSet):
         )
 
         vulnerability = plan.vulnerability
+        registrar(
+            organization=vulnerability.organization,
+            actor=request.user.username,
+            accion="verificacion_cerrada" if not still_present else "verificacion_fallida",
+            modalidad=NivelAutonomia.ASISTIDO,
+            objeto_tipo="vulnerability",
+            objeto_id=vulnerability.id,
+            detalle={"hallazgo": vulnerability.title, "sigue_presente": still_present, "reescaneo": attempt.scan_reference},
+        )
         if not attempt.vulnerability_still_present:
             plan.status = PlanStatus.CLOSED
             plan.save(update_fields=["status"])

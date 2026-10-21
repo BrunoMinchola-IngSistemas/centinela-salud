@@ -36,6 +36,7 @@ export const vulnerabilities = {
 
 export const controls = {
   list: () => client.get('/api/controls/'),
+  byTheme: () => client.get('/api/controls/por-tema/'),
   assess: (id) => client.post(`/api/controls/${id}/assess/`),
 }
 
@@ -48,4 +49,22 @@ export const remediationPlans = {
 
 export const evidence = {
   list: (params) => client.get('/api/evidence/', { params }),
+}
+
+export const governance = {
+  policies: () => client.get('/api/politicas-autonomia/'),
+  updatePolicy: (id, nivel) => client.patch(`/api/politicas-autonomia/${id}/`, { nivel }),
+  requests: () => client.get('/api/solicitudes-aprobacion/'),
+  createRequest: (payload) => client.post('/api/solicitudes-aprobacion/', payload),
+  approve: (id, comentario) => client.post(`/api/solicitudes-aprobacion/${id}/aprobar/`, { comentario }),
+  reject: (id, comentario) => client.post(`/api/solicitudes-aprobacion/${id}/rechazar/`, { comentario }),
+}
+
+export const audit = {
+  list: (params) => client.get('/api/registros-auditoria/', { params }),
+}
+
+export const incidents = {
+  list: () => client.get('/api/incidentes/'),
+  create: (payload) => client.post('/api/incidentes/', payload),
 }

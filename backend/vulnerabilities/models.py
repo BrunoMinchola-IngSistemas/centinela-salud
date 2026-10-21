@@ -4,6 +4,7 @@ from django.db import models
 
 from accounts.models import Organization
 from assets.models import Asset
+from controls.catalogo_iso import CategoriaHallazgo
 from controls.models import Control
 
 
@@ -88,6 +89,28 @@ class Vulnerability(models.Model):
         default=0, help_text="Puntaje 0-100 calculado por la IA combinando CVSS, EPSS y criticidad del activo."
     )
 
+    category = models.CharField(
+        "Categoría de hallazgo",
+        max_length=30,
+        blank=True,
+        choices=CategoriaHallazgo.CHOICES,
+        help_text="Decide a qué controles ISO se vincula automáticamente (tabla de la sección 8.5 del OE2).",
+    )
+    actively_exploited = models.BooleanField(
+        "Explotación activa reportada",
+        default=False,
+        help_text="Marcado si la CVE figura en inteligencia de amenazas (p. ej. CISA KEV). Regla R4.",
+    )
+    contextual_priority = models.CharField(
+        "Prioridad contextual",
+        max_length=10,
+        blank=True,
+        help_text="Severidad ajustada por las reglas R1-R5 (ver vulnerabilities/priority.py). Se recalcula sola.",
+    )
+    priority_rules = models.JSONField(
+        default=dict, blank=True, help_text="Qué reglas se aplicaron y por qué (explicabilidad)."
+    )
+
     status = models.CharField(max_length=20, choices=VulnerabilityStatus.choices, default=VulnerabilityStatus.OPEN)
     controls = models.ManyToManyField(Control, related_name="vulnerabilities", blank=True)
     due_date = models.DateField(null=True, blank=True)
@@ -110,6 +133,22 @@ class Vulnerability(models.Model):
 
     def __str__(self):
         return f"{self.cve or self.title} · {self.asset.hostname}"
+
+    def save(self, *args, **kwargs):
+        from .priority import calcular_para
+
+        resultado = calcular_para(self)
+        self.contextual_priority = resultado.nivel_final
+        self.priority_rules = resultado.as_dict()
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None:
+            kwargs["update_fields"] = set(update_fields) | {"contextual_priority", "priority_rules"}
+        super().save(*args, **kwargs)
+
+        if self.category:
+            from controls.services import vincular_controles
+
+            vincular_controles(self)
 
     @property
     def is_overdue(self):
