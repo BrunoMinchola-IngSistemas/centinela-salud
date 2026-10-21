@@ -12,17 +12,21 @@ Uso:
     python manage.py seed_demo_data --reset   # borra y vuelve a crear
 """
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand
 from django.db import transaction
+from django.utils import timezone
 from rest_framework.authtoken.models import Token
 
 from accounts.models import Organization, Role
 from accounts.models import User as Profile
 from assets.models import Asset, AssetType, Criticality
 from controls.models import Control, ControlMapping, Framework
+from governance.models import NIVEL_POR_TIPO_ACCION, NivelAutonomia, PoliticaAutonomia, TipoAccion
+from governance.audit import registrar
+from incidents.models import IncidenteReportado
 from remediation.models import PlanStatus, RemediationPlan, VerificationAttempt
 from vulnerabilities.models import Severity, SourceType, Vulnerability, VulnerabilitySource, VulnerabilityStatus
 
@@ -62,6 +66,7 @@ class Command(BaseCommand):
         sources = self._create_sources(org)
         controls = self._create_controls(org)
         self._create_vulnerabilities(org, assets, sources, controls)
+        self._create_governance_demo(org)
 
         self.stdout.write(self.style.SUCCESS("Datos de demostración listos."))
         self.stdout.write(f"  Org:      {org.name} ({org.id})")
@@ -249,3 +254,36 @@ class Command(BaseCommand):
                         requested_by="Ing. biomédica",
                         defaults={"vulnerability_still_present": False, "scan_reference": "openvas-task-demo"},
                     )
+
+    def _create_governance_demo(self, org):
+        """
+        HU23/HU27/HU30: siembra la política de autonomía por defecto
+        (la misma tabla de NIVEL_POR_TIPO_ACCION), un registro de
+        auditoría de ejemplo y un incidente reportado de ejemplo, para
+        que las nuevas pantallas de gobernanza no se vean vacías la
+        primera vez que se abren.
+        """
+        for tipo_accion, nivel in NIVEL_POR_TIPO_ACCION.items():
+            PoliticaAutonomia.objects.update_or_create(
+                organization=org, tipo_accion=tipo_accion, defaults={"nivel": nivel}
+            )
+
+        registrar(
+            organization=org,
+            actor="agente",
+            accion="verificacion_cerrada",
+            modalidad=NivelAutonomia.AUTONOMO,
+            objeto_tipo="vulnerability",
+            objeto_id="demo-v-1030",
+            detalle={"nota": "Reescaneo confirmó que la vulnerabilidad ya no está presente."},
+        )
+
+        IncidenteReportado.objects.get_or_create(
+            organization=org,
+            lugar="Consultorio 3",
+            defaults={
+                "descripcion": "Laptop desbloqueada con historial clínico de un paciente abierto en pantalla.",
+                "ocurrido_en": timezone.make_aware(datetime.combine(TODAY, datetime.min.time())),
+                "reportado_por": "demo",
+            },
+        )

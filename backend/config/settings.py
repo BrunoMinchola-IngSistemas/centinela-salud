@@ -51,6 +51,8 @@ INSTALLED_APPS = [
     "remediation",
     "evidence",
     "integrations",
+    "governance",
+    "incidents",
 ]
 
 MIDDLEWARE = [

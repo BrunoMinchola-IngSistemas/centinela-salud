@@ -13,12 +13,25 @@ técnico completo, está en `README.md` y `NOTES.md`.
    cuando en realidad algo falló).
 ✅ Todo en GitHub: https://github.com/BrunoMinchola-IngSistemas/centinela-salud
 ✅ Todo copiado en `D:\Tesis_Obj3`.
+✅ Comparación de hosting en Excel, ya en GitHub (para mandarle a tu
+   compañero de tesis):
+   https://github.com/BrunoMinchola-IngSistemas/centinela-salud/blob/main/docs/Centinela_Salud_Opciones_Hosting.xlsx
+✅ Nuevo: gobernanza de la remediación (niveles de autonomía,
+   solicitudes de aprobación), registro de auditoría a prueba de
+   edición/borrado, y reporte de incidentes del personal (HU23, HU24,
+   HU27, HU30) — 32 pruebas automáticas, todas verdes. Ver
+   `NOTES.md` sección "Ronda 3" para el detalle.
 
 ❌ Todavía usa SQLite (una base de datos en un archivo), no
    PostgreSQL. Ver sección 3.
 ❌ Todavía no está en internet — solo corre en tu compu. Ver sección 4.
 ❌ Wazuh y OpenVAS reales no están conectados (solo hay datos de
    ejemplo). Eso es trabajo para más adelante, no urgente ahora.
+❌ De las 30 HU de la tesis, lo nuevo de esta ronda (gobernanza +
+   incidentes) solo existe en la API y en el admin de Django — todavía
+   no tiene pantallas en React. Tampoco están hechos: el catálogo
+   completo de 93 controles ISO 27001 (hoy hay 8 de ejemplo), las
+   reglas de prioridad R1-R5, ni el MFA (segundo factor de login).
 
 ## 2. Cómo seguir trabajando con terminal real (Claude Code)
 

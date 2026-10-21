@@ -161,6 +161,93 @@ Cuando Bruno retome esto, los temas abiertos en orden sugerido son:
 4. Si quiere seguir iterando con Terminal real (no solo clics), usar
    Claude Code en su propia compu — pasos en `GUIA_RAPIDA.md` sección 2.
 
+## Ronda 3 — 2026-10-20, tarde (revisión contra las 30 HU reales de la tesis)
+
+Bruno pidió revisar el documento de contexto completo (`D:\Tesis`, no
+`D:\Tesis_Obj3`) para confirmar qué tanto del backlog de 30 HU está
+realmente cubierto por el código, y avanzar lo que se pudiera sin
+inventar nada que necesite una decisión suya (dataset, proveedor real
+de IA, credenciales de Wazuh/OpenVAS reales, etc.).
+
+**Hallazgo honesto:** el código cubre una fracción del backlog real.
+Faltaban completo: gobernanza de la remediación (niveles de autonomía,
+solicitudes de aprobación), el registro de auditoría inmutable, y el
+canal de reporte de incidentes del personal. Esta ronda cierra esas
+tres piezas (HU23, HU24, HU27, HU30) de punta a punta — modelo, API,
+tests y datos de ejemplo — porque son las que ya estaban completamente
+especificadas en el documento de contexto y no dependían de ninguna
+decisión pendiente de Bruno.
+
+**Hecho (app nueva `governance`):**
+- `PoliticaAutonomia`: qué nivel de autonomía (autónomo / asistido /
+  con aprobación gerencial) aplica a cada tipo de acción, por
+  organización. Sembrada con la tabla oficial de la sección 8.4 del
+  documento (notificar/abrir ticket/desactivar cuenta = autónomo;
+  aplicar parche/modificar config = asistido; aislar servidor =
+  requiere aprobación).
+- `SolicitudAprobacion` (HU24): para una acción que requiere
+  aprobación gerencial, el sistema arma una solicitud con el "riesgo
+  de no actuar" y el "efecto esperado", y queda pendiente hasta que
+  alguien la apruebe o rechace (`POST /api/solicitudes-aprobacion/<id>/aprobar/`
+  o `/rechazar/`). Cada decisión queda registrada: quién, cuándo, con
+  qué comentario.
+- `RegistroAuditoria` (HU27 / RNF-05 "log no editable ni borrable"):
+  tabla de **solo inserción**. El ViewSet solo expone list/retrieve/
+  create — no hay ninguna ruta de API para editar o borrar un
+  registro ya creado (lo verifica un test: PATCH y DELETE devuelven
+  405). El modelo además rechaza un segundo `save()` sobre el mismo
+  registro, como segunda barrera. (Falta la mitad "motor de base de
+  datos" — revocar UPDATE/DELETE a nivel de rol en PostgreSQL — que
+  solo tiene sentido aplicar cuando se migre de SQLite a Postgres;
+  queda anotado en el docstring del modelo.)
+- Un punto único (`governance/audit.py: registrar(...)`) para que
+  cualquier vista escriba al log de auditoría sin tener que repetir
+  los mismos 6 campos cada vez. Ya se usa en: crear/aprobar/rechazar
+  una solicitud de aprobación, y en reportar un incidente.
+
+**Hecho (app nueva `incidents`):**
+- `IncidenteReportado` (HU30 "reportar un incidente con máximo 3
+  campos"): exactamente 3 campos que la persona llena — qué pasó,
+  dónde, cuándo. Todo lo demás (quién, la organización, el estado) se
+  completa solo. Pensado para que cualquier persona del personal
+  clínico, sin entrenamiento técnico, pueda reportar algo sospechoso
+  en segundos.
+
+**Datos de ejemplo:** `seed_demo_data` ahora también siembra la
+política de autonomía por defecto (las 7 reglas de la tabla oficial),
+un registro de auditoría de ejemplo (el cierre de la vulnerabilidad de
+la bomba de infusión) y un incidente reportado de ejemplo, para que
+las pantallas nuevas no se vean vacías la primera vez.
+
+**Tests:** 9 tests nuevos (`governance/tests.py`: políticas por
+organización, crear/aprobar/rechazar solicitud + auditoría generada,
+aislamiento multi-tenant de solicitudes, que el log rechace
+PATCH/DELETE por API y por modelo; `incidents/tests.py`: reportar
+incidente con los 3 campos, aislamiento multi-tenant). **Total ahora:
+32 tests, todos verdes.**
+
+**Lo que esta ronda deliberadamente NO hace (para no fabricar nada que
+necesite una decisión de Bruno o de su asesor):**
+- No implementa el motor de reglas contextuales R1-R5 (vulnerabilities)
+  ni el cálculo de prioridad que describen — es lógica de negocio que
+  conviene validar con Bruno antes de codificarla mal.
+- No amplía el catálogo de controles ISO de 8 a los 93 reales de
+  Anexo A, ni la tabla de mapeo hallazgo→control de la sección 8.5 —
+  es trabajo mecánico pero largo (93 registros), mejor como una tarea
+  aparte explícitamente pedida.
+- No implementa MFA (HU29/RNF-04) — requiere elegir una librería TOTP
+  y decidir el flujo de UX (¿QR? ¿app autenticadora?), screens nuevas
+  en el frontend.
+- No conecta el frontend a ninguna de estas 3 piezas nuevas (no hay
+  pantallas de React para políticas de autonomía, solicitudes de
+  aprobación, auditoría ni incidentes todavía) — todo esto vive por
+  ahora solo en la API y en el admin de Django
+  (`/admin/governance/` y `/admin/incidents/`).
+- No toca SVM/spaCy, LangChain/máquina de estados del agente, ni
+  conexión real a Wazuh/OpenVAS/Qwen — siguen siendo los puntos
+  bloqueados por decisiones y recursos reales, no por falta de tiempo
+  de esta ronda.
+
 ## Cómo seguir esto desde cero
 
 ```bash

@@ -21,4 +21,6 @@ urlpatterns = [
     path("api/", include("vulnerabilities.urls")),
     path("api/", include("remediation.urls")),
     path("api/", include("evidence.urls")),
+    path("api/", include("governance.urls")),
+    path("api/", include("incidents.urls")),
 ]
