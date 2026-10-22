@@ -1,25 +1,40 @@
 -- ============================================================
--- Centinela Salud · preparación de PostgreSQL (se corre UNA vez)
+-- Centinela Salud · preparación de PostgreSQL (se corre UNA sola vez)
 -- ============================================================
--- Córrelo como el superusuario "postgres" (pgAdmin > Query Tool sobre la
--- base "postgres", o en la terminal:  psql -U postgres -f postgres_setup.sql)
+-- En pgAdmin 4:
+--   1. Servers > PostgreSQL (16 o 17) > Databases > postgres
+--      clic derecho > Query Tool.
+--   2. Abre este archivo (ícono de carpeta) o pega su contenido.
+--   3. Cambia 'cambia-esta-clave' por una clave tuya (línea marcada <<<).
+--      Esa MISMA clave va en backend\.env  ->  POSTGRES_PASSWORD=
+--   4. IMPORTANTE: córrelo en DOS partes (PostgreSQL no permite crear
+--      una base de datos en el mismo bloque que otras órdenes):
+--        PARTE 1: selecciona con el mouse solo las líneas de la PARTE 1
+--                 y presiona F5.  Debe decir "Query returned successfully".
+--        PARTE 2: selecciona solo la línea CREATE DATABASE y presiona F5.
 --
--- ANTES de correrlo, cambia la clave de la línea marcada con <<< por una
--- tuya, y pon esa MISMA clave en backend\.env (POSTGRES_PASSWORD).
+-- (Desde la terminal también funciona de una sola vez:
+--    psql -U postgres -f postgres_setup.sql )
 -- ============================================================
 
--- 1) Usuario con el que se conecta Django. Es dueño de las tablas y
---    corre las migraciones. CREATEDB solo hace falta para que
---    "python manage.py test" pueda crear su base temporal de pruebas.
-CREATE ROLE centinela LOGIN PASSWORD 'cambia-esta-clave' CREATEDB;   -- <<< cambia la clave
 
--- 2) Rol restringido SIN login. La API se "pone" este rol en cada
---    petición (SET ROLE) y ahí PostgreSQL aplica Row-Level Security.
+-- ---------------- PARTE 1 (seleccionar estas 3 líneas + F5) ----------------
+CREATE ROLE centinela LOGIN PASSWORD 'cambia-esta-clave' CREATEDB;   -- <<< cambia la clave
 CREATE ROLE centinela_app NOLOGIN;
 GRANT centinela_app TO centinela;
 
--- 3) La base de datos, propiedad de "centinela".
+
+-- ---------------- PARTE 2 (seleccionar esta línea + F5) ----------------
 CREATE DATABASE centinela OWNER centinela ENCODING 'UTF8';
 
--- Listo. Las tablas, permisos y políticas RLS las crea Django solo con:
+
+-- Qué hace cada cosa:
+--   centinela      -> usuario con el que se conecta Django. Dueño de las
+--                     tablas; corre las migraciones. CREATEDB es solo para
+--                     que "python manage.py test" cree su base de pruebas.
+--   centinela_app  -> rol restringido SIN login. La API se "pone" este rol
+--                     en cada petición y ahí PostgreSQL aplica Row-Level
+--                     Security (cada clínica solo ve lo suyo).
+--   centinela (BD) -> la base de datos.
+-- Las tablas, permisos y políticas RLS las crea Django solo con:
 --   python manage.py migrate
