@@ -1,0 +1,82 @@
+.settings { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 16px; align-items: start; }
+.settings-body { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.muted { color: var(--muted); }
+
+/* Pestañas laterales -------------------------------------------------- */
+.settings-nav { display: flex; flex-direction: column; gap: 6px; position: sticky; top: 0; }
+.settings-tab {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 11px 13px;
+  border-radius: var(--radius); border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+  transition: border-color .18s, box-shadow .18s, background .18s;
+}
+.settings-tab svg { color: var(--muted); flex: none; }
+.settings-tab span { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; flex: 1; }
+.settings-tab b { font-size: 13.5px; font-weight: 600; }
+.settings-tab small { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.settings-tab em { font-style: normal; flex: none; }
+.settings-tab:hover { border-color: var(--line-strong); }
+.settings-tab.on {
+  background: linear-gradient(90deg, rgba(56, 189, 248, 0.2), rgba(37, 99, 235, 0.1));
+  border-color: rgba(56, 189, 248, 0.5); box-shadow: inset 3px 0 0 var(--brand), var(--glow);
+}
+.settings-tab.on svg { color: var(--brand); }
+
+/* Formularios --------------------------------------------------------- */
+.settings-form { display: flex; flex-direction: column; gap: 12px; }
+.settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
+.settings-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.settings-form .alert-ok, .settings-form .alert-err { margin: 0; }
+.field input:disabled { opacity: .7; cursor: not-allowed; }
+.settings-row { display: flex; gap: 14px; align-items: flex-start; }
+.settings-row b { display: block; margin-bottom: 2px; }
+.settings-row p { margin: 0; font-size: 13px; }
+
+/* Conectores ---------------------------------------------------------- */
+.connectors { list-style: none; margin: 0; padding: 0; }
+.connectors li { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.connectors li:last-child { border-bottom: 0; }
+.conn-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); flex: none; opacity: .5; }
+.conn-dot.ok { background: var(--ok); opacity: 1; box-shadow: 0 0 8px var(--ok); }
+.conn-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.conn-body small { font-size: 12.5px; color: var(--muted); }
+.conn-body .mono { font-size: 11.5px; }
+
+/* General: filas de ajustes ------------------------------------------- */
+.pref-list { display: flex; flex-direction: column; }
+.pref-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.pref-row:last-child { border-bottom: 0; }
+.pref-label { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pref-label b { font-weight: 500; font-size: 14px; }
+.pref-label small { color: var(--muted); font-size: 12px; }
+.pref-control { flex: none; display: flex; align-items: center; gap: 8px; }
+.pref-control .sel { min-width: 210px; }
+.segmented { display: inline-flex; padding: 3px; gap: 2px; border-radius: 9px; background: var(--surface); border: 1px solid var(--line); }
+.segmented button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 36px; height: 30px; padding: 0 9px;
+  border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-size: 12.5px; transition: background .15s, color .15s;
+}
+.segmented button:hover { color: var(--ink); }
+.segmented button.on { background: var(--brand-soft); color: var(--brand); box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.4); }
+.pref-note { padding: 10px 16px; font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--line); }
+@media (max-width: 640px) {
+  .pref-row { flex-direction: column; align-items: stretch; }
+  .pref-control { justify-content: flex-end; }
+}
+
+/* Auditoría ----------------------------------------------------------- */
+.audit-filters { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 10px; align-items: end; border-bottom: 1px solid var(--line); }
+@media (max-width: 900px) { .audit-filters { grid-template-columns: 1fr 1fr; } }
+
+/* Interruptor --------------------------------------------------------- */
+.switch { width: 40px; height: 22px; border-radius: 999px; border: 1px solid var(--line-strong); background: var(--surface2); position: relative; padding: 0; transition: background .18s, border-color .18s; }
+.switch i { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--muted); transition: transform .18s, background .18s; }
+.switch.on { background: var(--brand-soft); border-color: var(--brand); }
+.switch.on i { transform: translateX(18px); background: var(--brand); box-shadow: 0 0 8px var(--brand); }
+.switch:disabled { opacity: .5; cursor: not-allowed; }
+
+@media (max-width: 900px) {
+  .settings { grid-template-columns: 1fr; }
+  .settings-nav { position: static; flex-direction: row; overflow-x: auto; }
+  .settings-tab { min-width: 200px; }
+  .settings-grid { grid-template-columns: 1fr; }
+}

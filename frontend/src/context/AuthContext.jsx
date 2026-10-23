@@ -22,6 +22,14 @@ export function AuthProvider({ children }) {
       .catch(() => setProfile(null))
   }, [token])
 
+  // Configuración cambia correo u organización: se vuelve a pedir el
+  // perfil para que la barra superior y el menú muestren lo nuevo.
+  async function reloadProfile() {
+    const { data } = await auth.me()
+    setProfile(data)
+    return data
+  }
+
   async function login(username, password) {
     const { data } = await auth.login(username, password)
     localStorage.setItem('centinela_token', data.token)
@@ -40,7 +48,7 @@ export function AuthProvider({ children }) {
   const canEdit = profile?.role !== 'auditor'
 
   const value = useMemo(
-    () => ({ token, isAuthenticated: Boolean(token), profile, canEdit, login, logout }),
+    () => ({ token, isAuthenticated: Boolean(token), profile, canEdit, login, logout, reloadProfile }),
     [token, profile, canEdit],
   )
 
