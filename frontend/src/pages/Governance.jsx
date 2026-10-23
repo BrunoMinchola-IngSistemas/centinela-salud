@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { governance, remediationPlans } from '../api/resources'
 import { EmptyState, ErrorState, LoadingState, extractErrorMessage } from '../components/DataState'
+import Select from '../components/Select'
 
 const NIVEL_BADGE = { autonomo: 'b-ok', asistido: 'b-br', con_aprobacion: 'b-high' }
 const NIVEL_LABEL = { autonomo: 'Autónomo', asistido: 'Asistido', con_aprobacion: 'Con aprobación' }
@@ -105,11 +106,7 @@ export default function Governance() {
                     <td>{p.tipo_accion_display}</td>
                     <td>
                       {isAdmin ? (
-                        <select value={p.nivel} onChange={(e) => changeLevel(p.id, e.target.value)} style={{ border: '1px solid var(--line)', borderRadius: 6, padding: '3px 6px', background: 'var(--surface)' }}>
-                          <option value="autonomo">Autónomo</option>
-                          <option value="asistido">Asistido</option>
-                          <option value="con_aprobacion">Con aprobación</option>
-                        </select>
+                        <Select size="sm" aria-label={`Nivel para ${p.tipo_accion_display}`} value={p.nivel} onChange={(nivel) => changeLevel(p.id, nivel)} options={Object.entries(NIVEL_LABEL).map(([value, label]) => ({ value, label }))} />
                       ) : (
                         <span className={`badge ${NIVEL_BADGE[p.nivel]}`}>{NIVEL_LABEL[p.nivel]}</span>
                       )}
@@ -210,6 +207,10 @@ function RequestForm({ onDone }) {
 
   async function submit(e) {
     e.preventDefault()
+    if (!form.plan) {
+      setError('Elige el plan de corrección que necesita aprobación.')
+      return
+    }
     setSaving(true)
     setError('')
     try {
@@ -234,21 +235,20 @@ function RequestForm({ onDone }) {
   return (
     <form className="panel pb" onSubmit={submit} style={{ marginBottom: 14, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
       {error && <div className="alert-err" style={{ gridColumn: '1 / -1', margin: 0 }}>{error}</div>}
-      <label className="field">
+      <div className="field">
         Plan de corrección
-        <select required value={form.plan} onChange={set('plan')}>
-          <option value="">Elige un plan…</option>
-          {plans.map((p) => (
-            <option key={p.id} value={p.id}>{p.vulnerability_detail?.title || `Plan ${p.id}`} · {p.vulnerability_detail?.asset_hostname}</option>
-          ))}
-        </select>
-      </label>
-      <label className="field">
+        <Select
+          aria-label="Plan de corrección"
+          placeholder="Elige un plan…"
+          value={form.plan}
+          onChange={(plan) => setForm({ ...form, plan })}
+          options={plans.map((p) => ({ value: p.id, label: `${p.vulnerability_detail?.title || `Plan ${p.id}`} · ${p.vulnerability_detail?.asset_hostname}` }))}
+        />
+      </div>
+      <div className="field">
         Acción que necesita aprobación
-        <select value={form.tipo_accion} onChange={set('tipo_accion')}>
-          {TIPOS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-        </select>
-      </label>
+        <Select aria-label="Acción que necesita aprobación" value={form.tipo_accion} onChange={(tipo_accion) => setForm({ ...form, tipo_accion })} options={TIPOS.map(([value, label]) => ({ value, label }))} />
+      </div>
       <label className="field">
         ¿Qué pasa si NO se actúa?
         <textarea required value={form.riesgo_de_no_actuar} onChange={set('riesgo_de_no_actuar')} />

@@ -1,39 +1,51 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import {
+  IconAlert, IconBook, IconBrain, IconBug, IconCalendar, IconCheckCircle, IconClock, IconExternal,
+  IconFolder, IconGrid, IconKanban, IconList, IconScale, IconServer, IconSettings, IconShield,
+} from '../components/Icons'
+import UserMenu from '../components/UserMenu'
+import { Toaster } from '../components/Toasts'
+import { useAlertPolling } from '../alerts'
+import { useTheme } from '../theme'
 import './AppShell.css'
 
 const NAV = [
   {
     group: 'Operación',
     items: [
-      { to: '/', label: 'Panel general', end: true },
-      { to: '/vulnerabilidades', label: 'Vulnerabilidades' },
-      { to: '/plan', label: 'Plan de corrección' },
-      { to: '/verificacion', label: 'Verificación' },
+      { to: '/', label: 'Panel general', end: true, icon: IconGrid },
+      { to: '/vulnerabilidades', label: 'Vulnerabilidades', icon: IconBug },
+      { to: '/plan', label: 'Plan de corrección', icon: IconKanban },
+      { to: '/verificacion', label: 'Verificación', icon: IconCheckCircle },
     ],
   },
   {
     group: 'Cumplimiento',
     items: [
-      { to: '/controles', label: 'Controles ISO 27001' },
-      { to: '/evidencias', label: 'Evidencias' },
+      { to: '/controles', label: 'Controles ISO 27001', icon: IconBook },
+      { to: '/evidencias', label: 'Evidencias', icon: IconFolder },
     ],
   },
   {
     group: 'Gobernanza',
     items: [
-      { to: '/gobernanza', label: 'Aprobaciones y autonomía' },
-      { to: '/auditoria', label: 'Registro de auditoría' },
+      { to: '/gobernanza', label: 'Aprobaciones y autonomía', icon: IconScale },
+      { to: '/auditoria', label: 'Registro de auditoría', icon: IconList },
     ],
   },
   {
     group: 'Personal',
-    items: [{ to: '/incidentes', label: 'Reportar incidente' }],
+    items: [{ to: '/incidentes', label: 'Reportar incidente', icon: IconAlert }],
   },
   {
     group: 'Inventario',
-    items: [{ to: '/activos', label: 'Activos' }],
+    items: [{ to: '/activos', label: 'Activos', icon: IconServer }],
+  },
+  {
+    group: 'Sistema',
+    items: [{ to: '/configuracion', label: 'Configuración', icon: IconSettings }],
   },
 ]
 
@@ -43,63 +55,97 @@ const NAV = [
 // la URL completa.
 const DJANGO_ADMIN_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000') + '/admin/'
 
+// Reloj de la barra superior: se actualiza cada segundo mientras la
+// consola esté abierta, como en un centro de operaciones.
+function useClock() {
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(id)
+  }, [])
+  return now
+}
+
 export default function AppShell() {
   const { logout, profile } = useAuth()
-  const [theme, setTheme] = useState(() => document.documentElement.dataset.theme || 'light')
+  const [theme, setTheme] = useTheme()
+  const now = useClock()
+  useAlertPolling(profile)
 
   function toggleTheme() {
-    const next = theme === 'dark' ? 'light' : 'dark'
-    document.documentElement.dataset.theme = next
-    setTheme(next)
+    setTheme(theme === 'dark' ? 'light' : 'dark')
   }
 
   const orgName = profile?.organization?.name || 'Cargando organización…'
   const isAdmin = profile?.role === 'admin'
 
-  const nav = isAdmin
-    ? [...NAV, { group: 'Administración', items: [], external: { label: 'Panel de Django (admin)', href: DJANGO_ADMIN_URL } }]
-    : NAV
+  const time = now.toLocaleTimeString('es-PE', { hour12: false })
+  const date = now.toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' })
 
   return (
     <div className="app">
+      <aside className="nav">
+        <div className="brand">
+          <span className="brand-mark"><IconShield size={22} /></span>
+          <span className="brand-text">
+            <b>CENTINELA<span>SALUD</span></b>
+            <small>Protección inteligente</small>
+          </span>
+        </div>
+
+        <div className="nav-groups">
+          {NAV.map((group) => (
+            <div key={group.group} className="nav-group">
+              <div className="grp">{group.group}</div>
+              {group.items.map((item) => {
+                const Ico = item.icon
+                return (
+                  <NavLink key={item.to} to={item.to} end={item.end}>
+                    <Ico />
+                    <span>{item.label}</span>
+                  </NavLink>
+                )
+              })}
+            </div>
+          ))}
+          {isAdmin && (
+            <div className="nav-group">
+              <div className="grp">Administración</div>
+              <a href={DJANGO_ADMIN_URL} target="_blank" rel="noreferrer">
+                <IconExternal />
+                <span>Panel de Django (admin)</span>
+              </a>
+            </div>
+          )}
+        </div>
+
+        <div className="engine">
+          <div className="engine-head">
+            <span>Motor IA</span>
+            <i className="dot" />
+          </div>
+          <div className="engine-icon"><IconBrain size={30} /></div>
+          <b>ACTIVO</b>
+          <small>Qwen local · datos de ejemplo</small>
+        </div>
+      </aside>
+
       <header className="top">
-        <div className="logo">Centinela Salud</div>
         <div className="org-badge">
+          <span className="org-label">Organización</span>
           <span className="org">{orgName}</span>
         </div>
-        <div className="chips">
-          <span className="svc"><i className="dot" />Wazuh</span>
-          <span className="svc"><i className="dot" />OpenVAS</span>
-        </div>
-        {profile && (
-          <div className="user-chip">
-            <span className="uname">{profile.username}</span>
-            <span className="urole">
-              <span className={`role-badge role-${profile.role}`}>{profile.role_display}</span>
-            </span>
-          </div>
-        )}
-        <button className="btn sm" onClick={toggleTheme}>{theme === 'dark' ? 'Modo claro' : 'Modo oscuro'}</button>
-        <button className="btn sm" onClick={logout}>Salir</button>
-      </header>
 
-      <nav className="nav">
-        {nav.map((group) => (
-          <div key={group.group}>
-            <div className="grp">{group.group}</div>
-            {group.items.map((item) => (
-              <NavLink key={item.to} to={item.to} end={item.end}>
-                {item.label}
-              </NavLink>
-            ))}
-            {group.external && (
-              <a href={group.external.href} target="_blank" rel="noreferrer">
-                {group.external.label} ↗
-              </a>
-            )}
+        <div className="top-right">
+          <span className="meta"><IconClock size={15} /><span className="mono">{time}</span></span>
+          <span className="meta"><IconCalendar size={15} />{date}</span>
+          <div className="chips">
+            <span className="svc"><i className="dot" />Wazuh</span>
+            <span className="svc"><i className="dot" />OpenVAS</span>
           </div>
-        ))}
-      </nav>
+          <UserMenu profile={profile} theme={theme} onToggleTheme={toggleTheme} onLogout={logout} />
+        </div>
+      </header>
 
       <main className="work">
         {profile?.role === 'auditor' && (
@@ -109,6 +155,7 @@ export default function AppShell() {
         )}
         <Outlet />
       </main>
+      <Toaster />
     </div>
   )
 }

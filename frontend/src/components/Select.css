@@ -1,0 +1,36 @@
+.sel { position: relative; display: inline-block; min-width: 0; }
+.field > .sel { display: block; width: 100%; }
+
+.sel-btn {
+  width: 100%; display: inline-flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 7px 10px 7px 12px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); color: var(--ink);
+  font: inherit; text-align: left; cursor: pointer; transition: border-color .18s, box-shadow .18s;
+}
+.sel.sm .sel-btn { padding: 4px 8px 4px 10px; font-size: 12.5px; }
+.sel-btn:hover { border-color: var(--line-strong); }
+.sel.open .sel-btn, .sel-btn:focus-visible { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-soft); }
+.sel.disabled .sel-btn { opacity: .5; cursor: not-allowed; }
+.sel-label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sel-label.placeholder { color: var(--muted); }
+.sel-chev { flex: none; color: var(--muted); transition: transform .18s; }
+.sel.open .sel-chev { transform: rotate(180deg); color: var(--brand); }
+
+.sel-pop {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 60; min-width: 100%; max-width: min(360px, 90vw); max-height: 280px; overflow: auto;
+  margin: 0; padding: 6px; list-style: none; border-radius: 9px;
+  background: linear-gradient(180deg, var(--surface2), var(--surface)); border: 1px solid var(--line-strong);
+  box-shadow: var(--glow-strong), 0 16px 32px rgba(0, 0, 0, 0.45); animation: sel-in .14s ease-out;
+}
+:root[data-theme='light'] .sel-pop { box-shadow: var(--glow-strong), 0 12px 28px rgba(15, 27, 51, 0.18); }
+.sel.align-right .sel-pop { left: auto; right: 0; }
+@keyframes sel-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+
+.sel-opt {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border-radius: 6px;
+  font-size: 13px; color: var(--ink); cursor: pointer; white-space: nowrap;
+}
+.sel-opt-label { overflow: hidden; text-overflow: ellipsis; }
+.sel-opt.hi { background: var(--brand-soft); color: var(--brand); }
+.sel-opt.selected { font-weight: 600; }
+.sel-opt.selected svg { color: var(--brand); flex: none; }
+.sel-opt.disabled { opacity: .45; cursor: not-allowed; }

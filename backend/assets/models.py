@@ -28,6 +28,27 @@ class Exposure(models.TextChoices):
     INTERNA = "interna", "Solo red interna"
 
 
+class DiscoverySource(models.TextChoices):
+    """Cómo llegó el activo al inventario."""
+
+    MANUAL = "manual", "Registro manual"
+    RED_LOCAL = "red_local", "Barrido de red local"
+    WAZUH = "wazuh", "Agentes Wazuh"
+    OPENVAS = "openvas", "Escaneo OpenVAS"
+
+
+class AssetStatus(models.TextChoices):
+    """
+    Estado operativo que se muestra en el inventario. No se guarda: se
+    deriva de si el agente Wazuh está en línea y del resultado del
+    último descubrimiento (ver Asset.estado).
+    """
+
+    EN_LINEA = "en_linea", "En línea"
+    SIN_SENAL = "sin_senal", "Sin señal"
+    DESCONOCIDO = "desconocido", "Sin verificar"
+
+
 class Asset(models.Model):
     """
     Un activo descubierto o registrado: servidor, estación, dispositivo
@@ -40,7 +61,13 @@ class Asset(models.Model):
     hostname = models.CharField(max_length=150)
     asset_type = models.CharField(max_length=20, choices=AssetType.choices)
     ip_address = models.GenericIPAddressField(null=True, blank=True)
+    mac_address = models.CharField(max_length=17, blank=True)
     operating_system = models.CharField(max_length=150, blank=True)
+    discovery_source = models.CharField(max_length=12, choices=DiscoverySource.choices, default=DiscoverySource.MANUAL)
+    last_discovered_at = models.DateTimeField(null=True, blank=True, help_text="Última vez que un descubrimiento lo encontró.")
+    reachable = models.BooleanField(
+        null=True, blank=True, help_text="Resultado del último descubrimiento: respondió (True), no respondió (False) o nunca se verificó (None)."
+    )
     criticality = models.CharField(max_length=10, choices=Criticality.choices, default=Criticality.MEDIUM)
     exposure = models.CharField(
         "Exposición", max_length=12, choices=Exposure.choices, default=Exposure.INTERNA
@@ -76,3 +103,45 @@ class Asset(models.Model):
     @property
     def open_vulnerability_count(self):
         return self.vulnerabilities.exclude(status="closed").count()
+
+    @property
+    def estado(self) -> str:
+        if self.wazuh_agent_online or self.reachable is True:
+            return AssetStatus.EN_LINEA
+        if self.reachable is False:
+            return AssetStatus.SIN_SENAL
+        return AssetStatus.DESCONOCIDO
+
+
+class DiscoveryRunStatus(models.TextChoices):
+    OK = "ok", "Completado"
+    ERROR = "error", "Con error"
+
+
+class DiscoveryRun(models.Model):
+    """
+    Una ejecución del descubrimiento de activos (HU de inventario):
+    quién la lanzó, contra qué (un rango de red o los agentes Wazuh) y
+    el informe de lo que encontró. Se conserva como historial para que
+    el Administrador vea cómo cambia el parque tecnológico en el tiempo.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="discovery_runs")
+    source = models.CharField(max_length=12, choices=DiscoverySource.choices)
+    target = models.CharField(max_length=60, blank=True, help_text="Rango CIDR barrido, vacío para fuentes sin rango.")
+    started_by = models.CharField(max_length=150)
+    started_at = models.DateTimeField(auto_now_add=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=10, choices=DiscoveryRunStatus.choices, default=DiscoveryRunStatus.OK)
+    error = models.TextField(blank=True)
+    found_count = models.PositiveIntegerField(default=0)
+    new_count = models.PositiveIntegerField(default=0)
+    unreachable_count = models.PositiveIntegerField(default=0)
+    hosts = models.JSONField(default=list, blank=True, help_text="Detalle por host: ip, hostname, mac, nuevo, activo_id.")
+
+    class Meta:
+        ordering = ["-started_at"]
+
+    def __str__(self):
+        return f"{self.get_source_display()} {self.target} ({self.started_at:%Y-%m-%d %H:%M})"
