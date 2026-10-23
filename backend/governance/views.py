@@ -134,3 +134,6 @@ class RegistroAuditoriaViewSet(
 
     serializer_class = RegistroAuditoriaSerializer
     queryset = RegistroAuditoria.objects.all()
+    # Filtros para la ventana de auditoría del Administrador
+    # (Configuración > Auditoría): por quién, qué acción y sobre qué.
+    filterset_fields = ["actor", "accion", "modalidad", "objeto_tipo"]
