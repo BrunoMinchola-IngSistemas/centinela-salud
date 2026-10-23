@@ -47,9 +47,9 @@ export default function Controls() {
 
   return (
     <div>
-      <div style={{ marginBottom: 16 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 600, margin: '0 0 2px' }}>Controles de seguridad</h1>
-        <p style={{ color: 'var(--muted)', margin: 0 }}>
+      <div className="page-head">
+        <h1>Controles de seguridad</h1>
+        <p>
           ISO/IEC 27001:2022 · controles del Anexo A seleccionados para salud (con referencia a ISO 27799). Cumplimiento calculado a partir de los hallazgos.
         </p>
       </div>

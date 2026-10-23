@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { remediationPlans, sources, vulnerabilities } from '../api/resources'
 import { ErrorState, LoadingState, extractErrorMessage } from '../components/DataState'
+import Select from '../components/Select'
 
 const SEV_LABEL = { critical: 'Crítica', high: 'Alta', medium: 'Media', low: 'Baja', none: 'Ninguna' }
 const SEV_BADGE = { critical: 'b-crit', high: 'b-high', medium: 'b-med', low: 'b-low', none: 'b-mut' }
@@ -56,10 +57,10 @@ export default function Vulnerabilities() {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: selected ? '1fr 380px' : '1fr', gap: 14 }}>
       <div>
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, marginBottom: 16 }}>
+        <div className="page-head" style={{ display: 'flex', alignItems: 'flex-end', gap: 12 }}>
           <div>
-            <h1 style={{ fontSize: 20, fontWeight: 600, margin: '0 0 2px' }}>Vulnerabilidades</h1>
-            <p style={{ color: 'var(--muted)', margin: 0 }}>Hallazgos de OpenVAS y Wazuh</p>
+            <h1>Vulnerabilidades</h1>
+            <p>Hallazgos de OpenVAS y Wazuh</p>
           </div>
           <button className="btn" style={{ marginLeft: 'auto' }} onClick={handleSync} disabled={!canEdit || syncing} title={canEdit ? undefined : "Solo lectura (Auditor)"}>
             {syncing ? 'Sincronizando…' : 'Sincronizar fuentes'}
@@ -73,13 +74,12 @@ export default function Vulnerabilities() {
         )}
 
         <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-          <select value={severity} onChange={(e) => setSeverity(e.target.value)} style={{ border: '1px solid var(--line)', borderRadius: 6, padding: '5px 9px', background: 'var(--surface)' }}>
-            <option value="">Todas las severidades</option>
-            <option value="critical">Crítica</option>
-            <option value="high">Alta</option>
-            <option value="medium">Media</option>
-            <option value="low">Baja</option>
-          </select>
+          <Select
+            aria-label="Severidad"
+            value={severity}
+            onChange={setSeverity}
+            options={[{ value: '', label: 'Todas las severidades' }, ...['critical', 'high', 'medium', 'low'].map((v) => ({ value: v, label: SEV_LABEL[v] }))]}
+          />
           <input
             placeholder="Buscar por CVE, título o activo"
             value={search}
