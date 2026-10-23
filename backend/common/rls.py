@@ -40,6 +40,7 @@ APP_ROLE = "centinela_app"
 TABLAS_CON_ORGANIZACION = [
     "accounts_user",
     "assets_asset",
+    "assets_discoveryrun",
     "controls_control",
     "vulnerabilities_vulnerabilitysource",
     "vulnerabilities_vulnerability",
