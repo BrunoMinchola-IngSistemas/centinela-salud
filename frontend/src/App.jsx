@@ -10,6 +10,7 @@ import Dashboard from './pages/Dashboard'
 import Evidence from './pages/Evidence'
 import Login from './pages/Login'
 import RemediationPlan from './pages/RemediationPlan'
+import Settings from './pages/Settings'
 import Verification from './pages/Verification'
 import Vulnerabilities from './pages/Vulnerabilities'
 
@@ -35,6 +36,7 @@ export default function App() {
         <Route path="gobernanza" element={<Governance />} />
         <Route path="auditoria" element={<AuditLog />} />
         <Route path="incidentes" element={<Incidents />} />
+        <Route path="configuracion" element={<Settings />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

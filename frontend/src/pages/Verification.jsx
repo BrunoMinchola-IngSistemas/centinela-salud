@@ -38,9 +38,9 @@ export default function Verification() {
 
   return (
     <div>
-      <div style={{ marginBottom: 16 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 600, margin: '0 0 2px' }}>Verificación</h1>
-        <p style={{ color: 'var(--muted)', margin: 0 }}>Confirma si el reescaneo encontró la vulnerabilidad otra vez</p>
+      <div className="page-head">
+        <h1>Verificación</h1>
+        <p>Confirma si el reescaneo encontró la vulnerabilidad otra vez</p>
       </div>
 
       {actionError && (

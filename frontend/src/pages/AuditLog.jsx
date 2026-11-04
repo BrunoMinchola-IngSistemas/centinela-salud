@@ -1,24 +1,7 @@
 import { Fragment, useEffect, useState } from 'react'
 import { audit } from '../api/resources'
 import { EmptyState, ErrorState, LoadingState, extractErrorMessage } from '../components/DataState'
-
-const MOD_BADGE = { autonomo: 'b-ok', asistido: 'b-br', con_aprobacion: 'b-high' }
-const MOD_LABEL = { autonomo: 'Autónomo', asistido: 'Asistido', con_aprobacion: 'Con aprobación' }
-
-// Traducción de los códigos internos de acción a algo legible.
-const ACCION_LABEL = {
-  solicitud_creada: 'Pidió aprobación',
-  solicitud_aprobada: 'Aprobó una acción',
-  solicitud_rechazada: 'Rechazó una acción',
-  politica_autonomia_cambiada: 'Cambió un nivel de autonomía',
-  incidente_reportado: 'Reportó un incidente',
-  verificacion_cerrada: 'Cerró un hallazgo tras verificar',
-  verificacion_fallida: 'Reescaneo: el hallazgo sigue presente',
-  plan_creado: 'Creó un plan de corrección',
-  plan_avanzado: 'Avanzó un plan de corrección',
-  analisis_ia: 'Analizó un hallazgo con IA',
-  notificacion_enviada: 'Envió una notificación',
-}
+import { ACCION_LABEL, MOD_BADGE, MOD_LABEL } from '../auditLabels'
 
 /**
  * HU27: registro de auditoría. Es de solo lectura para todos los roles

@@ -23,4 +23,5 @@ urlpatterns = [
     path("api/", include("evidence.urls")),
     path("api/", include("governance.urls")),
     path("api/", include("incidents.urls")),
+    path("api/", include("integrations.urls")),
 ]

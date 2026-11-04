@@ -2,6 +2,15 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { extractErrorMessage } from '../components/DataState'
+import { IconShield, IconShieldCheck } from '../components/Icons'
+import './Login.css'
+
+const DEMO_ACCOUNTS = [
+  ['demo', 'role-analyst', 'Analista de seguridad'],
+  ['admin_demo', 'role-admin', 'Administrador'],
+  ['coordinador_demo', 'role-it_owner', 'Responsable de TI'],
+  ['auditor_demo', 'role-auditor', 'Auditor (solo lectura)'],
+]
 
 export default function Login() {
   const { login } = useAuth()
@@ -34,70 +43,59 @@ export default function Login() {
   }
 
   return (
-    <div
-      style={{
-        height: '100vh',
-        display: 'grid',
-        placeItems: 'center',
-        background: 'radial-gradient(1200px 600px at 20% -10%, var(--brand-soft), transparent), var(--bg)',
-      }}
-    >
-      <form onSubmit={handleSubmit} className="panel" style={{ width: 340, padding: 24 }}>
-        <div
-          style={{
-            width: 34, height: 34, borderRadius: 9, background: 'var(--brand)', color: 'var(--brand-ink)',
-            display: 'grid', placeItems: 'center', fontWeight: 700, marginBottom: 10,
-          }}
-        >
-          CS
-        </div>
-        <h1 style={{ fontSize: 18, fontWeight: 600, margin: '0 0 4px' }}>Centinela Salud</h1>
-        <p style={{ color: 'var(--muted)', margin: '0 0 18px' }}>Consola de vulnerabilidades</p>
-        <label style={{ display: 'block', marginBottom: 12 }}>
-          <span style={{ display: 'block', marginBottom: 4, fontSize: 13 }}>Usuario</span>
-          <input
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--line)', borderRadius: 6, background: 'var(--surface2)' }}
-            autoFocus
-          />
-        </label>
-        <label style={{ display: 'block', marginBottom: 16 }}>
-          <span style={{ display: 'block', marginBottom: 4, fontSize: 13 }}>Contraseña</span>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--line)', borderRadius: 6, background: 'var(--surface2)' }}
-          />
-        </label>
-        {error && <p style={{ color: 'var(--crit)', fontSize: 13, margin: '0 0 12px' }}>{error}</p>}
-        <button type="submit" className="btn pri" disabled={loading} style={{ width: '100%', justifyContent: 'center' }}>
-          {loading ? 'Ingresando…' : 'Ingresar'}
-        </button>
-
-        <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid var(--line)', fontSize: 12, color: 'var(--muted)' }}>
-          <p style={{ margin: '0 0 8px', fontWeight: 500 }}>Cuentas de demostración (clave: demo12345)</p>
-          <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 5 }}>
-            <li style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span className="mono">demo</span>
-              <span className="role-badge role-analyst">Analista de seguridad</span>
-            </li>
-            <li style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span className="mono">admin_demo</span>
-              <span className="role-badge role-admin">Administrador</span>
-            </li>
-            <li style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span className="mono">coordinador_demo</span>
-              <span className="role-badge role-it_owner">Responsable de TI</span>
-            </li>
-            <li style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span className="mono">auditor_demo</span>
-              <span className="role-badge role-auditor">Auditor (solo lectura)</span>
-            </li>
+    <div className="login">
+      <div className="login-grid" aria-hidden="true" />
+      <div className="login-wrap">
+        <aside className="login-side">
+          <div className="login-brand">
+            <span className="brand-mark"><IconShield size={24} /></span>
+            <span>
+              <b>CENTINELA<em>SALUD</em></b>
+              <small>Protección inteligente</small>
+            </span>
+          </div>
+          <h1>Consola de ciberseguridad asistida por IA</h1>
+          <p>
+            Vulnerabilidades priorizadas por contexto clínico, controles ISO/IEC 27001 para salud y
+            acciones con aprobación de Gerencia, en un solo lugar.
+          </p>
+          <ul>
+            <li><IconShieldCheck size={16} />Prioridad contextual R1-R5 explicada</li>
+            <li><IconShieldCheck size={16} />31 controles ISO 27001 para PyMEs de salud</li>
+            <li><IconShieldCheck size={16} />Registro de auditoría que no se puede alterar</li>
           </ul>
-        </div>
-      </form>
+        </aside>
+
+        <form onSubmit={handleSubmit} className="panel login-card">
+          <h2>Iniciar sesión</h2>
+          <p className="login-sub">Accede con tu cuenta de la organización</p>
+
+          <label className="field">
+            <span>Usuario</span>
+            <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" autoFocus />
+          </label>
+          <label className="field">
+            <span>Contraseña</span>
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
+          </label>
+          {error && <p className="alert-err" role="alert">{error}</p>}
+          <button type="submit" className="btn pri login-btn" disabled={loading}>
+            {loading ? 'Ingresando…' : 'Ingresar'}
+          </button>
+
+          <div className="login-demo">
+            <p>Cuentas de demostración (clave: <span className="mono">demo12345</span>)</p>
+            <ul>
+              {DEMO_ACCOUNTS.map(([user, cls, label]) => (
+                <li key={user}>
+                  <button type="button" className="mono" onClick={() => { setUsername(user); setPassword('demo12345') }}>{user}</button>
+                  <span className={`role-badge ${cls}`}>{label}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </form>
+      </div>
     </div>
   )
 }

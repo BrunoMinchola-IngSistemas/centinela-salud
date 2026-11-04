@@ -47,6 +47,52 @@ def _get_token() -> str | None:
         return None
 
 
+@dataclass
+class WazuhAgent:
+    agent_id: str
+    name: str
+    ip: str
+    os_name: str
+    online: bool
+
+
+def fetch_agents() -> list[WazuhAgent]:
+    """
+    Inventario de agentes registrados en el manager, para el
+    descubrimiento de activos. Devuelve lista vacía si Wazuh no está
+    configurado en este entorno.
+    """
+    token = _get_token()
+    if not token:
+        logger.info("Wazuh no configurado en este entorno; descubrimiento por agentes omitido.")
+        return []
+    try:
+        resp = requests.get(
+            f"{WAZUH_API_URL}/agents",
+            headers={"Authorization": f"Bearer {token}"},
+            params={"select": "id,name,ip,os.name,status", "limit": 500},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        agents = []
+        for agent in resp.json()["data"]["affected_items"]:
+            if agent.get("id") == "000":  # el propio manager
+                continue
+            agents.append(
+                WazuhAgent(
+                    agent_id=agent.get("id", ""),
+                    name=agent.get("name", agent.get("id", "")),
+                    ip=agent.get("ip", "") or "",
+                    os_name=(agent.get("os") or {}).get("name", ""),
+                    online=agent.get("status") == "active",
+                )
+            )
+        return agents
+    except requests.RequestException:
+        logger.exception("Error consultando los agentes de Wazuh")
+        return []
+
+
 def fetch_sca_findings() -> list[NormalizedFinding]:
     """
     Trae los resultados fallidos de Security Configuration Assessment

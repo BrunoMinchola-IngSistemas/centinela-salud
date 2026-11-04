@@ -21,9 +21,9 @@ export default function Evidence() {
 
   return (
     <div>
-      <div style={{ marginBottom: 16 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 600, margin: '0 0 2px' }}>Evidencias</h1>
-        <p style={{ color: 'var(--muted)', margin: 0 }}>Cada registro guarda su huella SHA-256</p>
+      <div className="page-head">
+        <h1>Evidencias</h1>
+        <p>Cada registro guarda su huella SHA-256</p>
       </div>
       <div className="panel">
         {loading && <LoadingState />}
