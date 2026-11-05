@@ -67,6 +67,15 @@ CONTROLES = [
      "El personal clínico es el primer vector de phishing; ISO 27799 recomienda formación periódica.", {}),
     ("6.8", "Reporte de eventos de seguridad de la información", 63,
      "Que cualquier persona del personal pueda reportar algo sospechoso en segundos (HU30).", {}),
+    # Físicos (7.x): HU12 pide la matriz agrupada por los 4 dominios del
+    # Anexo A. Se incluyen los 3 físicos que más pesan en una clínica; el
+    # agente no los observa solo: los marca el Oficial de Cumplimiento.
+    ("7.2", "Entrada física", 70,
+     "Restringir el acceso a la sala de servidores y al archivo de historias clínicas en papel.", {}),
+    ("7.8", "Emplazamiento y protección de equipos", 68,
+     "Equipos biomédicos y estaciones en áreas de atención deben protegerse de manipulación y daños.", {}),
+    ("7.14", "Eliminación segura o reutilización de equipos", 62,
+     "Los discos de equipos dados de baja pueden contener historias clínicas: deben borrarse de forma segura.", {}),
     ("8.1", "Dispositivos de punto final de usuario", 69,
      "Estaciones de admisión y laboratorio con sistemas antiguos (p. ej. Windows 7).", {}),
     ("8.2", "Derechos de acceso privilegiado", 71,
@@ -104,6 +113,36 @@ CONTROLES = [
     ("8.32", "Gestión de cambios", 70,
      "Un parche mal aplicado puede detener un servicio clínico; los cambios deben planificarse y poder revertirse.", {}),
 ]
+
+
+# HU12/HU15: (madurez mínima 1-5, criticidad, costo estimado) de cada
+# control. Valores propuestos para una PyME de salud a partir del
+# esfuerzo típico de implementación (bajo = configuración o política;
+# medio = herramienta o servicio; alto = proyecto con inversión).
+# Pendiente de validar con el asesor, igual que las reglas R1-R5.
+ATRIBUTOS = {
+    "5.7": (2, "medio", "bajo"), "5.9": (1, "alto", "bajo"), "5.15": (1, "alto", "bajo"),
+    "5.17": (1, "alto", "bajo"), "5.18": (2, "medio", "bajo"), "5.23": (2, "medio", "medio"),
+    "5.24": (2, "alto", "bajo"), "5.25": (2, "medio", "bajo"), "5.26": (2, "alto", "medio"),
+    "5.30": (3, "alto", "alto"), "5.34": (1, "alto", "medio"), "6.3": (1, "alto", "bajo"),
+    "6.8": (1, "medio", "bajo"), "7.2": (1, "medio", "medio"), "7.8": (2, "medio", "medio"),
+    "7.14": (2, "medio", "bajo"), "8.1": (2, "medio", "medio"), "8.2": (1, "alto", "bajo"),
+    "8.5": (2, "alto", "medio"), "8.7": (1, "alto", "medio"), "8.8": (1, "alto", "medio"),
+    "8.9": (2, "medio", "medio"), "8.11": (3, "medio", "medio"), "8.13": (1, "alto", "medio"),
+    "8.15": (2, "alto", "medio"), "8.16": (3, "medio", "alto"), "8.19": (2, "medio", "bajo"),
+    "8.20": (2, "alto", "medio"), "8.22": (3, "alto", "alto"), "8.24": (2, "alto", "medio"),
+    "8.26": (3, "medio", "medio"), "8.28": (4, "bajo", "alto"), "8.29": (4, "bajo", "alto"),
+    "8.32": (3, "medio", "medio"),
+}
+
+# HU16: controles que sostienen las obligaciones de la Ley N.° 29733
+# (Protección de Datos Personales). Art. 16: seguridad del tratamiento;
+# Art. 17: confidencialidad. Mapeo propuesto, a validar con el asesor.
+LEY_29733 = {
+    "5.15": "Art. 16", "5.17": "Art. 16", "5.18": "Art. 16", "7.2": "Art. 16", "7.14": "Art. 16",
+    "8.2": "Art. 16", "8.5": "Art. 16", "8.13": "Art. 16", "8.15": "Art. 16", "8.24": "Art. 16",
+    "5.34": "Art. 17", "8.11": "Art. 17",
+}
 
 
 class CategoriaHallazgo:

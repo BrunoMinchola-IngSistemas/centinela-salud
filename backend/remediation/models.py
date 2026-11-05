@@ -17,13 +17,15 @@ class RemediationPlan(models.Model):
     """
 
     vulnerability = models.OneToOneField(Vulnerability, on_delete=models.CASCADE, related_name="plan")
-    owner_name = models.CharField(max_length=150)
+    # HU17 esc. 2: vacío = "responsable pendiente de asignación".
+    owner_name = models.CharField(max_length=150, blank=True)
     owner_email = models.EmailField(blank=True)
     status = models.CharField(max_length=20, choices=PlanStatus.choices, default=PlanStatus.PENDING)
     due_date = models.DateField()
     notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    generado_por_agente = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["due_date"]

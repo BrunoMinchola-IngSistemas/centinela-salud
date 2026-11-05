@@ -1,0 +1,82 @@
+CENTINELA SALUD - PASOS A GRAN ESCALA PARA SUBIR A AWS
+=======================================================
+Presupuesto: US$100 de crédito. Costo estimado ~US$32/mes (us-east-1) => ~3 meses.
+  EC2 t4g.small ~12 · EBS 20 GB ~1.6 · IPv4 pública ~3.6 · RDS db.t4g.micro + 20 GB ~14 · S3/CloudWatch ~1
+  Ahorro: apagar RDS/EC2 cuando no se use (RDS se puede detener hasta 7 días).
+
+ARQUITECTURA
+  Internet -> HTTPS (Caddy, Let's Encrypt) en EC2 (subred pública, Elastic IP)
+           -> contenedores: web (Caddy + React), api (Django/gunicorn), programador (tareas)
+           -> RDS PostgreSQL 16 (subred privada, cifrado KMS, sin acceso público, RLS)
+           -> S3 privado cifrado (evidencias y reportes)
+  Secretos: SSM Parameter Store (/centinela/prod/*). Acceso admin: Session Manager (sin SSH).
+  Logs: CloudWatch Logs /centinela/prod. Correo opcional: Amazon SES.
+
+PASO 0 - Cuenta
+  1. Activar MFA en el usuario raíz; crear usuario IAM administrador con MFA; no usar el raíz.
+  2. Billing > Budgets: alertas a US$25, 50 y 80. Verificar que el crédito aplica (Billing > Credits).
+  3. Región: us-east-1 (más barata). Todo en la misma región.
+
+PASO 1 - Red
+  1. VPC propia (asistente "VPC y más"): 2 AZ, 2 subredes públicas, 2 privadas, SIN NAT gateway.
+  2. Security groups:
+     sg-web: entrada 80 y 443 (TCP) + 443 (UDP) desde 0.0.0.0/0. Sin puerto 22.
+     sg-db:  entrada 5432 SOLO desde sg-web.
+
+PASO 2 - Base de datos (RDS)
+  1. RDS > PostgreSQL 16, plantilla Free tier/Dev, db.t4g.micro, 20 GB gp3, Single-AZ.
+  2. Subredes privadas, acceso público = NO, sg-db, cifrado activado (KMS aws/rds),
+     backups automáticos 7 días, protección contra eliminación activada.
+  3. Usuario maestro: postgres_admin (clave larga, guardarla en el gestor de claves).
+
+PASO 3 - Almacenamiento (S3)
+  1. Bucket centinela-salud-evidencias-<sufijo>: Block Public Access TOTAL, versionado ON,
+     cifrado por defecto SSE-KMS (aws/s3).
+  2. Bucket policy: deploy/aws/politica-bucket-evidencias.json (reemplazar BUCKET).
+
+PASO 4 - Permisos (IAM)
+  1. Rol para EC2 "centinela-ec2": política administrada AmazonSSMManagedInstanceCore
+     + política propia deploy/aws/iam-politica-ec2.json (reemplazar REGION, CUENTA, BUCKET).
+  2. CloudWatch Logs: crear grupo /centinela/prod con retención 30 días.
+
+PASO 5 - Servidor (EC2)
+  1. Amazon Linux 2023 arm64, t4g.small, disco 20 GB gp3 CIFRADO, subred pública, sg-web,
+     rol centinela-ec2, IMDSv2 obligatorio, sin par de claves (se entra por Session Manager).
+  2. Datos de usuario: pegar deploy/aws/user-data.sh (instala Docker, Compose, swap, parches automáticos).
+  3. Asignar una Elastic IP. Dominio:
+     - con dominio propio: registro A -> Elastic IP;
+     - sin dominio: usar <IP-con-guiones>.sslip.io (ej. 54-12-34-56.sslip.io), gratis.
+  4. Alarma CloudWatch "StatusCheckFailed_System" con acción "Recuperar instancia".
+
+PASO 6 - Secretos (Parameter Store)
+  Crear cada variable de deploy/env.produccion.ejemplo como SecureString en
+  /centinela/prod/<NOMBRE> (DJANGO_SECRET_KEY, PSEUDONIMIZACION_CLAVE, POSTGRES_*, DOMINIO, ...).
+  Claves: python -c "import secrets; print(secrets.token_urlsafe(64))". Sin comillas ni espacios.
+
+PASO 7 - Preparar la base (una vez, desde la EC2 por Session Manager)
+  curl -o /opt/centinela/global-bundle.pem https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
+  psql "host=<endpoint> dbname=postgres user=postgres_admin sslmode=verify-full sslrootcert=/opt/centinela/global-bundle.pem" \
+       -v clave_app="'<clave de centinela>'" -v maestro=postgres_admin -f deploy/aws/rds-preparar.sql
+
+PASO 8 - Desplegar la aplicación
+  1. Copiar el código a /opt/centinela/app (git clone con deploy key de solo lectura de GitHub).
+  2. sudo bash /opt/centinela/app/deploy/aws/desplegar.sh
+     (baja secretos -> construye imágenes -> migrate + RLS -> check --deploy -> levanta servicios)
+  3. Cargar datos demo para la validación (clave robusta, obligatoria en producción):
+     docker compose --env-file /opt/centinela/.env run --rm api python manage.py seed_demo_data --clave "<Clave-Larga>"
+  4. Forzar primera corrida de tareas: ... run --rm api python manage.py programador --una-vez
+
+PASO 9 - Validar en la nube (tercera validación de las HU, ahora con HTTPS)
+  python deploy/validar_hu.py --url https://<DOMINIO> --clave "<Clave-Larga>"
+  Esperado: todo PASA; HU01 barrido local queda N/A (en la nube se usa Wazuh); HTTPS+HSTS PASA.
+  Además: https://www.ssllabs.com/ssltest/ (meta: A).
+
+PASO 10 - Operación
+  Actualizar: git pull + desplegar.sh. Logs: CloudWatch > /centinela/prod.
+  Respaldos: RDS automático 7 días + versiones de S3. Revisar Budgets cada semana.
+  Al terminar la tesis: snapshot final de RDS y borrar EC2, RDS, Elastic IP y bucket.
+
+ESTADO DE VALIDACIÓN ANTES DE SUBIR (05/11/2026)
+  - 149 pruebas Django en SQLite: OK. 144 en PostgreSQL 17 + RLS: OK (verificar_rls OK).
+  - validar_hu.py de punta a punta: 66 PASA / 0 FALLA / 1 N/A (HTTPS) en SQLite y en PostgreSQL.
+  - npm run build y lint sin errores.

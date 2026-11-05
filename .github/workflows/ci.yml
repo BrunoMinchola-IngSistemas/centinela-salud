@@ -8,25 +8,26 @@ on:
 
 jobs:
   backend:
-    name: Backend (Django tests)
+    name: Backend (Django tests, SQLite)
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: backend
+    env:
+      DJANGO_SECRET_KEY: ci-only-not-for-production
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.13"
           cache: "pip"
           cache-dependency-path: backend/requirements.txt
       - run: pip install -r requirements.txt
+      - run: python manage.py makemigrations --check --dry-run
       - run: python manage.py test
-        env:
-          DJANGO_SECRET_KEY: ci-only-not-for-production
 
   backend-postgres:
-    name: Backend (PostgreSQL + Row-Level Security)
+    name: Backend (PostgreSQL + RLS + validación HU01-HU30 de punta a punta)
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -46,23 +47,34 @@ jobs:
       POSTGRES_PASSWORD: ci-clave
       POSTGRES_HOST: localhost
       POSTGRES_PORT: "5432"
+      INTEGRACIONES_DEMO: "True"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.13"
           cache: "pip"
           cache-dependency-path: backend/requirements.txt
       - run: pip install -r requirements.txt
       - name: Preparar roles y base (mismo script que en la PC)
         run: sed "s/cambia-esta-clave/ci-clave/" ../docs/postgres_setup.sql | PGPASSWORD=postgres psql -h localhost -U postgres -v ON_ERROR_STOP=1
       - run: python manage.py migrate
-      - run: python manage.py seed_demo_data
+      - run: python manage.py seed_demo_data --clave demo12345
       - run: python manage.py verificar_rls
       - run: python manage.py test --noinput
+      - name: Validación de punta a punta por HTTP (login real, RLS activo)
+        run: |
+          python manage.py runserver 127.0.0.1:8000 --noreload > ../runserver.log 2>&1 &
+          for i in $(seq 1 40); do curl -sf http://127.0.0.1:8000/api/salud/ && break; sleep 1; done
+          python ../deploy/validar_hu.py --url http://127.0.0.1:8000 --clave demo12345 --informe ../resultados_validacion.md
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: resultados-validacion-hu
+          path: resultados_validacion.md
 
   frontend:
-    name: Frontend (build)
+    name: Frontend (lint y build)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -75,4 +87,19 @@ jobs:
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
+      - run: npm run lint
       - run: npm run build
+
+  docker:
+    name: Imágenes Docker (las mismas que se despliegan en AWS)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t centinela-api:ci backend
+      - run: docker build -t centinela-web:ci -f deploy/Dockerfile.web .
+      - name: La imagen de la API arranca y responde /api/salud/
+        run: |
+          docker run -d --name api -e DJANGO_SECRET_KEY=ci -e SQLITE_PATH=/tmp/db.sqlite3 -e DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1 -p 8000:8000 centinela-api:ci \
+            sh -c "python manage.py migrate --noinput && gunicorn config.wsgi:application --bind 0.0.0.0:8000"
+          for i in $(seq 1 40); do curl -sf http://127.0.0.1:8000/api/salud/ && break; sleep 1; done
+          curl -sf http://127.0.0.1:8000/api/salud/

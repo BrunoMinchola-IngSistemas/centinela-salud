@@ -1,12 +1,39 @@
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
 from .models import Organization, Role, User
 
 
 class OrganizationSerializer(serializers.ModelSerializer):
+    nivel_madurez_display = serializers.CharField(source="get_nivel_madurez_display", read_only=True, default="")
+    periodicidad_reporte_display = serializers.CharField(source="get_periodicidad_reporte_display", read_only=True)
+    responsable_escalamiento_nombre = serializers.CharField(source="responsable_escalamiento.username", read_only=True, default="")
+
     class Meta:
         model = Organization
-        fields = ["id", "name", "ruc"]
+        fields = [
+            "id", "name", "ruc", "rango_red", "nivel_madurez", "nivel_madurez_display", "periodicidad_reporte",
+            "periodicidad_reporte_display", "ultimo_reporte_en", "ejecucion_autonoma_activa",
+            "responsable_escalamiento", "responsable_escalamiento_nombre",
+        ]
+        read_only_fields = ["id", "ultimo_reporte_en"]
+
+    def validate_rango_red(self, value):
+        value = (value or "").strip()
+        if not value:
+            return value
+        from assets.discovery import ObjetivoInvalido, validar_cidr
+
+        try:
+            return str(validar_cidr(value))
+        except ObjetivoInvalido as exc:
+            raise serializers.ValidationError(str(exc)) from exc
+
+    def validate_responsable_escalamiento(self, user):
+        if user is not None and getattr(getattr(user, "profile", None), "organization_id", None) != self.instance.id:
+            raise serializers.ValidationError("El segundo responsable debe pertenecer a la organización.")
+        return user
 
 
 class MeSerializer(serializers.ModelSerializer):
@@ -21,10 +48,31 @@ class MeSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(source="user.email", read_only=True)
     role_display = serializers.CharField(source="get_role_display", read_only=True)
     organization = OrganizationSerializer(read_only=True)
+    modulos = serializers.SerializerMethodField()
+    admin_django = serializers.SerializerMethodField()
+
+    def get_modulos(self, obj):
+        from common.modulos import modulos_de
+
+        return modulos_de(obj.role)
+
+    def get_admin_django(self, obj):
+        from django.conf import settings
+
+        return bool(settings.ADMIN_DJANGO_HABILITADO and obj.user.is_staff)
 
     class Meta:
         model = User
-        fields = ["username", "email", "role", "role_display", "organization", "mfa_enabled"]
+        fields = ["username", "email", "role", "role_display", "organization", "mfa_enabled", "modulos", "admin_django"]
+
+
+def _clave_robusta(valor, user=None):
+    """Aplica las reglas de AUTH_PASSWORD_VALIDATORS (mínimo 10, no común, no solo números)."""
+    try:
+        validate_password(valor, user=user)
+    except DjangoValidationError as exc:
+        raise serializers.ValidationError(list(exc.messages)) from exc
+    return valor
 
 
 class MeUpdateSerializer(serializers.Serializer):
@@ -43,6 +91,10 @@ class CambiarClaveSerializer(serializers.Serializer):
             raise serializers.ValidationError({"clave_actual": "La contraseña actual no es correcta."})
         if data["clave_actual"] == data["clave_nueva"]:
             raise serializers.ValidationError({"clave_nueva": "La contraseña nueva debe ser distinta a la actual."})
+        try:
+            _clave_robusta(data["clave_nueva"], user)
+        except serializers.ValidationError as exc:
+            raise serializers.ValidationError({"clave_nueva": exc.detail}) from exc
         return data
 
 
@@ -63,8 +115,13 @@ class MiembroSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["id", "username", "email", "role", "role_display", "is_active", "mfa_enabled", "last_login", "date_joined"]
-        read_only_fields = ["mfa_enabled"]
+        fields = [
+            "id", "user_id", "username", "email", "role", "role_display", "is_active", "mfa_enabled", "bloqueado",
+            "last_login", "date_joined",
+        ]
+        read_only_fields = ["mfa_enabled", "user_id"]
+
+    bloqueado = serializers.BooleanField(source="esta_bloqueado", read_only=True)
 
     def update(self, instance, validated_data):
         user_data = validated_data.pop("user", {})
@@ -82,6 +139,9 @@ class MiembroCrearSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True, min_length=8)
     role = serializers.ChoiceField(choices=Role.choices, default=Role.ANALYST)
 
+    def validate_password(self, value):
+        return _clave_robusta(value)
+
     def validate_username(self, value):
         from django.contrib.auth import get_user_model
 
@@ -92,3 +152,6 @@ class MiembroCrearSerializer(serializers.Serializer):
 
 class RestablecerClaveSerializer(serializers.Serializer):
     clave_nueva = serializers.CharField(write_only=True, min_length=8)
+
+    def validate_clave_nueva(self, value):
+        return _clave_robusta(value)

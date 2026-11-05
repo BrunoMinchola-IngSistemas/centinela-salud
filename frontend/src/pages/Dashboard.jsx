@@ -25,7 +25,6 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
 
   function load() {
-    setLoading(true)
     setError('')
     dashboard
       .summary()
@@ -34,7 +33,13 @@ export default function Dashboard() {
       .finally(() => setLoading(false))
   }
 
-  useEffect(load, [])
+  // HU19/HU16: el panel se vuelve a pedir cada 30 s, así un cambio de
+  // estado hecho por otra persona se ve sin recargar la página.
+  useEffect(() => {
+    load()
+    const id = setInterval(load, 30000)
+    return () => clearInterval(id)
+  }, [])
 
   if (loading) return <LoadingState label="Cargando panel general…" />
   if (error) return <ErrorState message={error} onRetry={load} />
@@ -54,8 +59,22 @@ export default function Dashboard() {
     <div className="dash">
       <div className="page-head">
         <h1>Panel general</h1>
-        <p>Monitoreo en tiempo real y protección asistida por IA</p>
+        <p>Monitoreo en tiempo real y protección asistida por IA · actualizado {data.updated_at ? new Date(data.updated_at).toLocaleTimeString('es-PE') : ''}</p>
       </div>
+
+      {data.risk && (
+        <div className={`semaforo ${data.risk.semaforo}`} style={{ marginBottom: 14 }}>
+          <div className="luz">{data.risk.score}</div>
+          <div>
+            <b style={{ fontFamily: 'var(--font-display)', textTransform: 'uppercase', letterSpacing: '.06em' }}>Risk Score · riesgo {data.risk.nivel}</b>
+            <p style={{ margin: '4px 0 0' }}>{data.risk.mensaje}</p>
+            <p className="small muted" style={{ margin: '4px 0 0' }}>
+              Cumplimiento ISO (controles implementados): {data.iso_compliance} % · vencidos: {data.overdue_count}
+              {data.pending_association ? ` · ${data.pending_association} hallazgo(s) pendiente(s) de asociación` : ''}
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="dash-grid">
         {/* Columna izquierda ------------------------------------------- */}

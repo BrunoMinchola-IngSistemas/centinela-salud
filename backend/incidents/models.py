@@ -19,6 +19,15 @@ class EstadoIncidente(models.TextChoices):
     CERRADO = "cerrado", "Cerrado"
 
 
+class CategoriaIncidente(models.TextChoices):
+    PHISHING = "phishing", "Correo o mensaje engañoso (phishing)"
+    MALWARE = "malware", "Virus / ransomware"
+    ACCESO = "acceso_no_autorizado", "Acceso no autorizado"
+    FUGA = "fuga_datos", "Posible fuga de datos de pacientes"
+    FISICO = "fisico", "Pérdida o robo de equipo"
+    OTRO = "otro", "Otro / por clasificar"
+
+
 class IncidenteReportado(models.Model):
     """
     Los 3 campos de HU30: qué pasó (`descripcion`), dónde (`lugar`) y
@@ -39,10 +48,21 @@ class IncidenteReportado(models.Model):
     estado = models.CharField(max_length=20, choices=EstadoIncidente.choices, default=EstadoIncidente.REPORTADO)
     creado_en = models.DateTimeField(auto_now_add=True)
 
+    # Evaluación automática del agente (HU30): la recibe TI en el momento.
+    evaluacion_categoria = models.CharField(max_length=25, choices=CategoriaIncidente.choices, blank=True)
+    evaluacion_severidad = models.CharField(max_length=10, blank=True)
+    evaluacion_resumen = models.TextField(blank=True)
+    evaluacion_recomendacion = models.TextField(blank=True)
+    evaluado_en = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         ordering = ["-creado_en"]
         verbose_name = "Incidente reportado"
         verbose_name_plural = "Incidentes reportados"
+
+    @property
+    def evaluacion_categoria_display(self):
+        return self.get_evaluacion_categoria_display() if self.evaluacion_categoria else ""
 
     def __str__(self):
         return f"{self.lugar} · {self.ocurrido_en:%Y-%m-%d} · {self.get_estado_display()}"

@@ -21,6 +21,16 @@ class RemediationPlanSerializer(OrganizationScopedRelationsMixin, serializers.Mo
     # Opcional al crear: si no se envía, la vista lo calcula a partir
     # de la severidad (ver RemediationPlanViewSet.perform_create).
     due_date = serializers.DateField(required=False)
+    responsable_pendiente = serializers.SerializerMethodField()
+    vencido = serializers.SerializerMethodField()
+
+    def get_responsable_pendiente(self, obj):
+        return not obj.owner_name
+
+    def get_vencido(self, obj):
+        from datetime import date
+
+        return obj.status != "closed" and obj.due_date < date.today()
 
     class Meta:
         model = RemediationPlan
@@ -30,6 +40,9 @@ class RemediationPlanSerializer(OrganizationScopedRelationsMixin, serializers.Mo
             "vulnerability_detail",
             "owner_name",
             "owner_email",
+            "responsable_pendiente",
+            "vencido",
+            "generado_por_agente",
             "status",
             "due_date",
             "notes",
@@ -37,7 +50,7 @@ class RemediationPlanSerializer(OrganizationScopedRelationsMixin, serializers.Mo
             "updated_at",
             "verification_attempts",
         ]
-        read_only_fields = ["id", "created_at", "updated_at"]
+        read_only_fields = ["id", "created_at", "updated_at", "generado_por_agente"]
 
     def validate_vulnerability(self, vulnerability: Vulnerability):
         if hasattr(vulnerability, "plan"):

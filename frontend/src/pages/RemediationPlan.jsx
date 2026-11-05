@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { remediationPlans } from '../api/resources'
-import { ErrorState, LoadingState, extractErrorMessage } from '../components/DataState'
+import { remediationPlans, saveBlob } from '../api/resources'
+import { ErrorState, LoadingState, extractErrorMessage, extractErrorMessageAsync } from '../components/DataState'
 
 const COLUMNS = [
   { key: 'pending', label: 'Pendiente' },
@@ -9,33 +9,78 @@ const COLUMNS = [
   { key: 'in_verification', label: 'En verificación' },
   { key: 'closed', label: 'Cerrado' },
 ]
+const ROLES_GENERAN = ['admin', 'compliance', 'it_owner', 'analyst']
 
+/**
+ * Plan de corrección (tablero). HU17: el agente genera las acciones
+ * (responsable, plazo, estado) y se exportan en PDF o Excel. HU19:
+ * cada cambio de estado queda con fecha y usuario. HU22: tarjetas
+ * vencidas marcadas.
+ */
 export default function RemediationPlan() {
-  const { canEdit } = useAuth()
+  const { canEdit, role } = useAuth()
   const [plans, setPlans] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [actionError, setActionError] = useState('')
+  const [msg, setMsg] = useState({ ok: '', err: '' })
+  const [generando, setGenerando] = useState(false)
 
-  function load() {
-    setLoading(true)
+  const load = useCallback(() => {
     setError('')
     remediationPlans
       .list()
       .then((res) => setPlans(res.data.results ?? res.data))
       .catch((err) => setError(extractErrorMessage(err)))
       .finally(() => setLoading(false))
-  }
+  }, [])
 
-  useEffect(load, [])
+  useEffect(load, [load])
 
   async function advance(id) {
-    setActionError('')
+    setMsg({ ok: '', err: '' })
     try {
       await remediationPlans.advance(id)
       load()
     } catch (err) {
-      setActionError(extractErrorMessage(err))
+      setMsg({ ok: '', err: extractErrorMessage(err) })
+    }
+  }
+
+  async function generar() {
+    setGenerando(true)
+    setMsg({ ok: '', err: '' })
+    try {
+      const { data } = await remediationPlans.generate('low')
+      setMsg({
+        ok: data.creados
+          ? `El agente generó ${data.creados} acción(es) de corrección${data.responsable_disponible ? '' : ' (sin Responsable de TI disponible: quedan con responsable pendiente de asignación)'} y notificó a TI.`
+          : 'No había hallazgos priorizados sin plan.',
+        err: '',
+      })
+      load()
+    } catch (err) {
+      setMsg({ ok: '', err: extractErrorMessage(err) })
+    } finally {
+      setGenerando(false)
+    }
+  }
+
+  async function asignar(p) {
+    const nombre = window.prompt('Responsable de esta acción:', p.owner_name)
+    if (nombre === null) return
+    try {
+      await remediationPlans.update(p.id, { owner_name: nombre.trim() })
+      load()
+    } catch (err) {
+      setMsg({ ok: '', err: extractErrorMessage(err) })
+    }
+  }
+
+  async function exportar(formato) {
+    try {
+      saveBlob(await remediationPlans.exportFile(formato), `plan_remediacion.${formato}`)
+    } catch (err) {
+      setMsg({ ok: '', err: await extractErrorMessageAsync(err) })
     }
   }
 
@@ -44,16 +89,22 @@ export default function RemediationPlan() {
 
   return (
     <div>
-      <div className="page-head">
-        <h1>Plan de corrección</h1>
-        <p>Tareas con responsable y fecha límite</p>
+      <div className="page-head" style={{ display: 'flex', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
+        <div>
+          <h1>Plan de corrección</h1>
+          <p>Acciones con responsable, plazo y estado</p>
+        </div>
+        <span className="row-actions" style={{ marginLeft: 'auto' }}>
+          <button className="btn pri" onClick={generar} disabled={!canEdit || !ROLES_GENERAN.includes(role) || generando}>
+            {generando ? 'Generando…' : 'Generar plan con el agente'}
+          </button>
+          <button className="btn" onClick={() => exportar('pdf')}>Exportar PDF</button>
+          <button className="btn" onClick={() => exportar('xlsx')}>Exportar Excel</button>
+        </span>
       </div>
 
-      {actionError && (
-        <div className="panel" style={{ padding: '8px 12px', marginBottom: 10, color: 'var(--crit)', fontSize: 13 }}>
-          {actionError}
-        </div>
-      )}
+      {msg.ok && <div className="alert-ok">{msg.ok}</div>}
+      {msg.err && <div className="alert-err">{msg.err}</div>}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(220px, 1fr))', gap: 12, overflow: 'auto' }}>
         {COLUMNS.map((col) => {
@@ -67,14 +118,19 @@ export default function RemediationPlan() {
               <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {items.length === 0 && <div className="empty">Sin tareas</div>}
                 {items.map((p) => (
-                  <div key={p.id} className="panel" style={{ padding: '10px 11px', borderLeft: '3px solid var(--brand)' }}>
-                    <span className="mono" style={{ color: 'var(--muted)' }}>PC-{p.id} · {p.vulnerability_detail?.cve || 'sin CVE'}</span>
+                  <div key={p.id} className="panel" style={{ padding: '10px 11px', borderLeft: `3px solid ${p.vencido ? 'var(--crit)' : 'var(--brand)'}` }}>
+                    <span className="mono muted">PC-{p.id} · {p.vulnerability_detail?.cve || 'sin CVE'}</span>
+                    {p.generado_por_agente && <span className="badge b-br" style={{ marginLeft: 6 }}>Agente</span>}
+                    {p.vencido && <span className="badge b-crit" style={{ marginLeft: 6 }}>Vencido</span>}
                     <p style={{ margin: '4px 0 8px', fontWeight: 500 }}>{p.vulnerability_detail?.title}</p>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--muted)' }}>
-                      <span>{p.owner_name}</span><span>{p.due_date}</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--muted)', gap: 8 }}>
+                      {p.responsable_pendiente
+                        ? <button className="btn sm" onClick={() => asignar(p)} disabled={!canEdit} style={{ color: 'var(--high)' }}>Responsable pendiente de asignación</button>
+                        : <span onDoubleClick={() => canEdit && asignar(p)} title="Doble clic para cambiar">{p.owner_name}</span>}
+                      <span className="mono">{p.due_date}</span>
                     </div>
                     {(col.key === 'pending' || col.key === 'in_progress') && (
-                      <button className="btn sm" style={{ marginTop: 8, width: '100%', justifyContent: 'center' }} disabled={!canEdit} title={canEdit ? undefined : "Solo lectura (Auditor)"} onClick={() => advance(p.id)}>
+                      <button className="btn sm" style={{ marginTop: 8, width: '100%', justifyContent: 'center' }} disabled={!canEdit} title={canEdit ? undefined : 'Solo lectura (Auditor)'} onClick={() => advance(p.id)}>
                         {col.key === 'pending' ? 'Iniciar' : 'Enviar a verificación'}
                       </button>
                     )}

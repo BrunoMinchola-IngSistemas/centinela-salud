@@ -11,3 +11,31 @@ python-dotenv==1.2.4
 requests==2.34.2
 sqlparse==0.6.0
 urllib3==2.8.0
+tzdata==2026.5
+# Producción (servidor WSGI y estáticos)
+gunicorn==26.2.0
+whitenoise==6.12.0
+# HU06: CVSS desde el vector de métricas base
+cvss==3.6
+# HU08: clasificador SVM
+scikit-learn==1.9.1
+numpy==2.5.4
+scipy==1.18.1
+joblib==1.6.0
+threadpoolctl==3.7.0
+# HU15/HU17/HU21: PDF y Excel
+fpdf2==2.9.0
+fonttools==4.68.0
+pillow==13.0.0
+openpyxl==3.1.5
+et_xmlfile==2.0.0
+# HU29: código QR para el segundo factor
+segno==1.6.6
+# AWS: S3 (evidencias y reportes) y Bedrock (opcional)
+boto3==1.43.124
+botocore==1.43.124
+jmespath==1.1.0
+s3transfer==0.19.3
+python-dateutil==2.9.0.post0
+six==1.17.0
+django-storages==1.14.6

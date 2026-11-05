@@ -26,10 +26,29 @@ export function extractErrorMessage(error) {
   }
 
   if (error.request) {
-    return 'No se pudo conectar con el backend. Verifica que "python manage.py runserver" siga corriendo en el puerto 8000.'
+    return import.meta.env.DEV
+      ? 'No se pudo conectar con el backend. Verifica que "python manage.py runserver" siga corriendo en el puerto 8000.'
+      : 'No se pudo conectar con el servidor. Revisa tu conexión e intenta de nuevo.'
   }
 
   return error.message || 'Ocurrió un error inesperado.'
+}
+
+/** Igual que extractErrorMessage, pero lee el cuerpo cuando la respuesta era un archivo (responseType: 'blob'). */
+export async function extractErrorMessageAsync(error) {
+  const data = error?.response?.data
+  if (data instanceof Blob) {
+    try {
+      const text = await data.text()
+      const json = JSON.parse(text)
+      if (typeof json.detail === 'string') return json.detail
+      const first = Object.values(json)[0]
+      return Array.isArray(first) ? String(first[0]) : String(first ?? text)
+    } catch {
+      return extractErrorMessage({ response: { status: error.response.status, data: null } })
+    }
+  }
+  return extractErrorMessage(error)
 }
 
 export function ErrorState({ message, onRetry }) {

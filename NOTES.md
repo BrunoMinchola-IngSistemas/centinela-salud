@@ -338,3 +338,39 @@ npm run dev
 Entrar con `demo` (analista), `admin_demo` (administrador/Gerencia),
 `coordinador_demo` (responsable de TI) o `auditor_demo` (auditor, solo
 lectura). Clave para todos: `demo12345`.
+
+## Ronda 5 — 2026-11-04/05 (completar las 30 HU y preparar AWS)
+
+Bruno decidió quedarse con `main` (el stash no se aplica) y pidió: completar
+las HU restantes, preparar el despliegue en AWS (crédito de US$100),
+validar todo al menos 3 veces y documentarlo.
+
+**Hecho (rama `completar-hu-y-aws`):**
+- Las 24 HU que estaban a medias o sin hacer: CVE NVD+KEV (HU03), esquema
+  único y registros incompletos (HU04), avisos de activo nuevo (HU05),
+  CVSS desde el vector (HU06), activo opcional e impacto (HU07), SVM con
+  accuracy/F1 (HU08), matriz de riesgos (HU09), tendencia (HU10), brecha
+  pendiente (HU11), madurez (HU12), % por dominio (HU13), evidencias con
+  archivo (HU14), recomendaciones exportables (HU15), cuadro ejecutivo
+  con Ley 29733 y Risk Score (HU16/HU20), plan generado por el agente
+  (HU17), ejecución autónoma con interruptor (HU18), reportes periódicos
+  (HU21), vencimientos (HU22), escalamiento (HU24), explicación (HU25),
+  asistente (HU26), roles y módulos (HU28), MFA + bloqueo (HU29),
+  evaluación de incidentes (HU30), seudonimización (Ley 29733).
+- Apps nuevas `notificaciones` e `informes`; `python manage.py programador`.
+- 6 pantallas nuevas y campana de notificaciones; 2 bugs de interfaz
+  corregidos (clase `.sel` que chocaba con el Select; condición en Gobernanza).
+- Producción: settings seguros, Docker, Caddy (HTTPS), docker-compose,
+  scripts de AWS (`deploy/aws/`), CI con validación de punta a punta.
+
+**Validación:** 149 pruebas OK en SQLite; 144/144 en PostgreSQL 17 + RLS
+(antes de sumar 5 de seguridad); `deploy/validar_hu.py` 66 PASA / 0 FALLA /
+1 N/A (HTTPS, se valida en AWS) en SQLite y en PostgreSQL; 17 pantallas ×
+4 roles sin errores de JavaScript.
+
+**Documentos:** `docs/Centinela_Salud_Cambios_HU.docx` (pantallas y
+acciones), `docs/Pasos_AWS.txt` (guía de despliegue), `docs/capturas/`.
+
+**A validar con el asesor:** 3 controles físicos nuevos (catálogo de 34),
+mapeo Ley 29733, pesos del Risk Score, atributos de madurez/costo, reglas
+de evaluación de incidentes. Ejecutores del agente siguen simulados.

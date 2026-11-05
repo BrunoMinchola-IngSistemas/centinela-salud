@@ -1,46 +1,45 @@
-from datetime import timedelta
-
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.utils import timezone
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from assets.models import Asset
 from controls.models import Control
+from controls.services import cumplimiento_global
+from informes.indicadores import risk_score
 from vulnerabilities.models import Severity, Vulnerability, VulnerabilityStatus
 
 
 class DashboardSummaryView(APIView):
     """
     Agrega en una sola llamada lo que pinta el Panel general de la
-    consola: cifras de riesgo, exposición por tipo de activo y los
-    controles con mayor brecha. Pensado para una sola organización
-    por request (ver TODO de autenticación/tenant más abajo).
+    consola: cifras de riesgo, exposición por tipo de activo, los
+    controles con mayor brecha y el Risk Score (HU20). La consola lo
+    vuelve a pedir cada 30 s, así un cambio de estado se ve sin
+    recargar (HU16/HU19).
     """
 
-    permission_classes = [IsAuthenticated]
+    modulo = "panel"
 
     def get(self, request):
         profile = getattr(request.user, "profile", None)
         if profile is None:
-            return Response(
-                {"detail": "El usuario no tiene un perfil de organización asociado."}, status=403
-            )
+            return Response({"detail": "El usuario no tiene un perfil de organización asociado."}, status=403)
         organization = profile.organization
 
         open_qs = Vulnerability.objects.filter(organization=organization).exclude(status=VulnerabilityStatus.CLOSED)
-        today = timezone.now().date()
+        today = timezone.localdate()
 
         by_severity = dict(open_qs.values_list("severity").annotate(n=Count("id")).values_list("severity", "n"))
-        overdue_count = open_qs.filter(due_date__lt=today).count()
+        # HU22: vencido = plazo propio vencido, o sin plazo propio y con el plazo del plan vencido.
+        overdue_count = open_qs.filter(
+            Q(due_date__lt=today) | Q(due_date__isnull=True, plan__due_date__lt=today)
+        ).count()
 
         exposure = []
         for asset_type, label in Asset._meta.get_field("asset_type").choices:
             assets_of_type = Asset.objects.filter(organization=organization, asset_type=asset_type)
-            counts = {
-                sev: open_qs.filter(asset__in=assets_of_type, severity=sev).count() for sev, _ in Severity.choices
-            }
+            counts = {sev: open_qs.filter(asset__in=assets_of_type, severity=sev).count() for sev, _ in Severity.choices}
             total = sum(counts.values())
             if total or assets_of_type.exists():
                 exposure.append({"type": label, "total": total, "by_severity": counts})
@@ -61,22 +60,22 @@ class DashboardSummaryView(APIView):
         )
 
         avg_compliance = (
-            round(sum(c["score"] for c in controls_with_gaps) / len(controls_with_gaps))
-            if controls_with_gaps
-            else 0
+            round(sum(c["score"] for c in controls_with_gaps) / len(controls_with_gaps)) if controls_with_gaps else 0
         )
 
         return Response(
             {
                 "open_count": open_qs.count(),
-                "closed_count": Vulnerability.objects.filter(
-                    organization=organization, status=VulnerabilityStatus.CLOSED
-                ).count(),
+                "closed_count": Vulnerability.objects.filter(organization=organization, status=VulnerabilityStatus.CLOSED).count(),
                 "critical_open": by_severity.get("critical", 0),
                 "overdue_count": overdue_count,
+                "pending_association": open_qs.filter(asset__isnull=True).count(),
                 "avg_compliance": avg_compliance,
+                "iso_compliance": cumplimiento_global(organization),
+                "risk": risk_score(organization),
                 "exposure_by_asset_type": exposure,
                 "control_gaps": controls_with_gaps[:4],
                 "top_priority": list(top_priority),
+                "updated_at": timezone.now(),
             }
         )

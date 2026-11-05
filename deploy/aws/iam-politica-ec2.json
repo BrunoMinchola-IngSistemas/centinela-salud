@@ -1,0 +1,49 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "LeerSecretosDeCentinela",
+      "Effect": "Allow",
+      "Action": ["ssm:GetParametersByPath", "ssm:GetParameter", "ssm:GetParameters"],
+      "Resource": "arn:aws:ssm:REGION:CUENTA:parameter/centinela/prod*"
+    },
+    {
+      "Sid": "DescifrarSecretosSoloViaSSM",
+      "Effect": "Allow",
+      "Action": "kms:Decrypt",
+      "Resource": "*",
+      "Condition": { "StringEquals": { "kms:ViaService": "ssm.REGION.amazonaws.com" } }
+    },
+    {
+      "Sid": "EvidenciasYReportesEnS3",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+      "Resource": "arn:aws:s3:::BUCKET/*"
+    },
+    {
+      "Sid": "ListarBucket",
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::BUCKET"
+    },
+    {
+      "Sid": "CifradoKMSDeS3",
+      "Effect": "Allow",
+      "Action": ["kms:GenerateDataKey", "kms:Decrypt"],
+      "Resource": "*",
+      "Condition": { "StringEquals": { "kms:ViaService": "s3.REGION.amazonaws.com" } }
+    },
+    {
+      "Sid": "LogsDeContenedores",
+      "Effect": "Allow",
+      "Action": ["logs:CreateLogStream", "logs:PutLogEvents", "logs:DescribeLogStreams"],
+      "Resource": "arn:aws:logs:REGION:CUENTA:log-group:/centinela/prod:*"
+    },
+    {
+      "Sid": "QwenEnBedrockOpcional",
+      "Effect": "Allow",
+      "Action": "bedrock:InvokeModel",
+      "Resource": "arn:aws:bedrock:REGION::foundation-model/*"
+    }
+  ]
+}

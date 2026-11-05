@@ -1,0 +1,66 @@
+# Centinela Salud en una instancia EC2 (o en cualquier servidor con Docker).
+#
+#   cd /opt/centinela/app/deploy
+#   docker compose up -d --build
+#   docker compose -f docker-compose.yml -f docker-compose.cloudwatch.yml up -d   # en AWS, logs a CloudWatch
+#
+# Variables: /opt/centinela/.env (lo genera aws/cargar_secretos.sh desde
+# Parameter Store). Ver deploy/env.produccion.ejemplo.
+
+x-api: &api
+  build:
+    context: ../backend
+  image: centinela-api:latest
+  env_file: ${CENTINELA_ENV:-/opt/centinela/.env}
+  restart: unless-stopped
+  read_only: true
+  tmpfs:
+    - /tmp
+  volumes:
+    - media:/app/media
+  security_opt:
+    - no-new-privileges:true
+
+services:
+  api:
+    <<: *api
+    expose:
+      - "8000"
+
+  programador:
+    <<: *api
+    command: ["python", "manage.py", "programador"]
+    healthcheck:
+      disable: true
+    depends_on:
+      api:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
+      args:
+        MOSTRAR_CUENTAS_DEMO: ${MOSTRAR_CUENTAS_DEMO:-false}
+    image: centinela-web:latest
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMINIO: ${DOMINIO:?Define DOMINIO (tu dominio o <ip-con-guiones>.sslip.io)}
+      ACME_EMAIL: ${ACME_EMAIL:?Define ACME_EMAIL (correo para Let's Encrypt)}
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  media:
+  caddy_data:
+  caddy_config:

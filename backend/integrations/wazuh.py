@@ -99,10 +99,14 @@ def fetch_sca_findings() -> list[NormalizedFinding]:
     de todos los agentes y los devuelve ya normalizados. Esta función
     se llama desde una tarea periódica (ver integrations/sync.py).
     """
-    token = _get_token()
-    if not token:
+    if not WAZUH_API_URL:
         logger.info("Wazuh no configurado en este entorno; sync omitido.")
         return []
+    token = _get_token()
+    if not token:
+        # HU02: configurado pero sin respuesta -> se propaga para que
+        # sync_all_sources lo anote en el log de fallas y siga.
+        raise ConnectionError(f"No se pudo autenticar contra Wazuh en {WAZUH_API_URL}.")
 
     headers = {"Authorization": f"Bearer {token}"}
     findings: list[NormalizedFinding] = []
@@ -129,6 +133,6 @@ def fetch_sca_findings() -> list[NormalizedFinding]:
                         severity="medium",
                     )
                 )
-    except requests.RequestException:
-        logger.exception("Error consultando la API de Wazuh")
+    except requests.RequestException as exc:
+        raise ConnectionError(f"Error consultando la API de Wazuh: {exc}") from exc
     return findings

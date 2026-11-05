@@ -2,7 +2,17 @@ from rest_framework import serializers
 
 from common.serializers import OrganizationScopedRelationsMixin
 
-from .models import PoliticaAutonomia, RegistroAuditoria, SolicitudAprobacion
+from remediation.models import RemediationPlan
+
+from .models import (
+    ACCIONES_AUTONOMAS_LISTA_BLANCA,
+    AccionAgente,
+    NivelAutonomia,
+    PoliticaAutonomia,
+    RegistroAuditoria,
+    SolicitudAprobacion,
+    TipoAccion,
+)
 
 
 class PoliticaAutonomiaSerializer(serializers.ModelSerializer):
@@ -12,6 +22,17 @@ class PoliticaAutonomiaSerializer(serializers.ModelSerializer):
     class Meta:
         model = PoliticaAutonomia
         fields = ["id", "tipo_accion", "tipo_accion_display", "nivel", "nivel_display", "actualizado_en"]
+
+    def validate(self, data):
+        tipo = data.get("tipo_accion", getattr(self.instance, "tipo_accion", None))
+        if data.get("nivel") == NivelAutonomia.AUTONOMO and tipo not in ACCIONES_AUTONOMAS_LISTA_BLANCA:
+            raise serializers.ValidationError(
+                {
+                    "nivel": "Solo las acciones de bajo riesgo de la lista blanca (notificar, abrir ticket, "
+                    "desactivar cuenta inactiva) pueden ser autónomas."
+                }
+            )
+        return data
 
 
 class SolicitudAprobacionSerializer(OrganizationScopedRelationsMixin, serializers.ModelSerializer):
@@ -60,3 +81,26 @@ class RegistroAuditoriaSerializer(serializers.ModelSerializer):
             "creado_en",
         ]
         read_only_fields = fields
+
+
+class AccionAgenteSerializer(serializers.ModelSerializer):
+    tipo_accion_display = serializers.CharField(source="get_tipo_accion_display", read_only=True)
+    nivel_display = serializers.CharField(source="get_nivel_aplicado_display", read_only=True)
+    estado_display = serializers.CharField(source="get_estado_display", read_only=True)
+    vulnerability_title = serializers.CharField(source="plan.vulnerability.title", read_only=True)
+    solicitud_estado = serializers.CharField(source="solicitud.estado", read_only=True, default="")
+
+    class Meta:
+        model = AccionAgente
+        fields = [
+            "id", "plan", "vulnerability_title", "tipo_accion", "tipo_accion_display", "nivel_aplicado",
+            "nivel_display", "estado", "estado_display", "motivo", "detalle", "solicitud", "solicitud_estado",
+            "propuesta_por", "ejecutada_por", "resultado", "creado_en", "ejecutado_en",
+        ]
+        read_only_fields = fields
+
+
+class ProponerAccionSerializer(OrganizationScopedRelationsMixin, serializers.Serializer):
+    plan = serializers.PrimaryKeyRelatedField(queryset=RemediationPlan.objects.all())
+    tipo_accion = serializers.ChoiceField(choices=TipoAccion.choices)
+    detalle = serializers.CharField(required=False, allow_blank=True, max_length=1000)

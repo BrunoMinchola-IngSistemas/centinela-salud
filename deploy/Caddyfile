@@ -1,0 +1,48 @@
+# Caddy: HTTPS automático + consola React + proxy a la API.
+# DOMINIO: tu dominio (p. ej. centinela.midominio.pe) o, sin dominio,
+# el nombre gratuito <IP-con-guiones>.sslip.io de la Elastic IP.
+{
+	email {$ACME_EMAIL}
+}
+
+{$DOMINIO} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "same-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+		Cross-Origin-Opener-Policy "same-origin"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+		-Server
+	}
+
+	request_body {
+		max_size 12MB
+	}
+
+	@api path /api/* /admin/* /static/*
+	handle @api {
+		reverse_proxy api:8000 {
+			header_up X-Forwarded-Proto {scheme}
+		}
+	}
+
+	handle {
+		root * /srv
+		# Rutas de React (p. ej. /controles) al recargar la página.
+		try_files {path} /index.html
+		file_server
+		@html path / /index.html
+		header @html Cache-Control "no-cache"
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

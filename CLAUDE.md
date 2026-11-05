@@ -13,11 +13,14 @@ de lo que vas a hacer.**
 
 - `backend/` Django 6 + DRF. Apps: `accounts` (organización, perfil, rol),
   `assets`, `vulnerabilities` (+ `priority.py` reglas R1-R5), `controls`
-  (+ `catalogo_iso.py`, 31 controles ISO para salud y mapeo hallazgo→control),
+  (+ `catalogo_iso.py`, 34 controles ISO para salud, Ley 29733 y mapeo hallazgo→control),
   `remediation`, `evidence`, `governance` (autonomía, aprobaciones,
   auditoría solo-inserción), `incidents` (reporte en 3 campos),
-  `integrations` (Wazuh/OpenVAS/Qwen, aún con datos de ejemplo),
-  `common` (permisos por rol, Row-Level Security, mixins).
+  `integrations` (Wazuh/OpenVAS/Kaspersky en modo demo, asistente, Qwen/Bedrock),
+  `notificaciones` (avisos por persona), `informes` (Risk Score, reportes,
+  cuadro ejecutivo), `common` (permisos por rol y módulo `modulos.py`,
+  Row-Level Security, seudonimización, `programador` de tareas).
+- `deploy/` Docker, Caddy, docker-compose, scripts de AWS y `validar_hu.py`.
 - `frontend/` React + Vite. Páginas en `src/pages/`, API en `src/api/resources.js`.
 - `docs/` script de PostgreSQL y comparación de hosting.
 - `NOTES.md` historial de rondas de trabajo; `GUIA_RAPIDA.md` guía corta.
@@ -43,13 +46,18 @@ npm run lint
 
 Usuarios demo (clave `demo12345`): `demo` (analista), `admin_demo`
 (administrador/Gerencia), `coordinador_demo` (responsable de TI),
-`auditor_demo` (auditor, solo lectura).
+`cumplimiento_demo` (oficial de cumplimiento), `personal_demo` (personal
+administrativo), `auditor_demo` (auditor, solo lectura).
+
+Validar HU de punta a punta: `python deploy/validar_hu.py --url http://localhost:8000 --clave demo12345`
+Tareas periódicas: `python manage.py programador --una-vez`
 
 ## Reglas del proyecto
 
 - Multi-organización: toda vista filtra por la organización del usuario
   (`common/mixins.py`) y los campos relacionados editables usan
   `OrganizationScopedRelationsMixin` (`common/serializers.py`). No romper esto.
+- Toda vista nueva declara `modulo = "..."` (ver `common/modulos.py`, HU28).
 - Permisos: el rol Auditor no puede escribir (`common/permissions.py`);
   aprobar/rechazar y cambiar políticas de autonomía es solo del Administrador.
 - Acciones relevantes se registran con `governance.audit.registrar(...)`.
@@ -65,5 +73,6 @@ Usuarios demo (clave `demo12345`): `demo` (analista), `admin_demo`
 
 ## Pendiente conocido
 
-MFA (HU29), despliegue en AWS, validar R1-R5 y el catálogo con el asesor,
-SVM/spaCy, LangChain, conexión real a Wazuh/OpenVAS/Qwen. Ver `NOTES.md`.
+Desplegar en AWS (`docs/Pasos_AWS.txt`), validar con el asesor R1-R5,
+catálogo, Ley 29733 y Risk Score; spaCy/LangChain; conexión real a
+Wazuh/OpenVAS/Qwen. Ver `NOTES.md` (Ronda 5).

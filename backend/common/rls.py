@@ -48,6 +48,13 @@ TABLAS_CON_ORGANIZACION = [
     "governance_politicaautonomia",
     "governance_registroauditoria",
     "incidents_incidentereportado",
+    "notificaciones_notificacion",
+    "informes_snapshotriesgo",
+    "informes_reportegenerado",
+    "integrations_fallaintegracion",
+    "integrations_registroincompleto",
+    "governance_accionagente",
+    "vulnerabilities_entrenamientomodelo",
 ]
 
 # Tablas sin organización directa: (tabla, condición que la liga a una

@@ -12,3 +12,9 @@ frontend/.env
 
 # Sistema
 .DS_Store
+
+# Producción / despliegue
+backend/media/
+backend/staticfiles/
+deploy/resultados_validacion_*.md
+deploy/.env
