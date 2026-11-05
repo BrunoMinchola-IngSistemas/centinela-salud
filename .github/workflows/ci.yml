@@ -13,6 +13,8 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    env:
+      DJANGO_SECRET_KEY: ci-only-not-for-production
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -23,8 +25,6 @@ jobs:
       - run: pip install -r requirements.txt
       - run: python manage.py makemigrations --check --dry-run
       - run: python manage.py test
-        env:
-          DJANGO_SECRET_KEY: ci-only-not-for-production
 
   backend-postgres:
     name: Backend (PostgreSQL + RLS + validación HU01-HU30 de punta a punta)
