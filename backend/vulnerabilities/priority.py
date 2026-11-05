@@ -127,6 +127,13 @@ def calcular_prioridad(*, cvss, severidad_declarada, exposicion, criticidad, exp
 
 def calcular_para(vulnerability):
     asset = vulnerability.asset
+    if asset is None:
+        # HU07 esc. 2: sin activo no hay contexto para R1-R5; no se
+        # inventa un nivel de impacto, queda "pendiente de asociación".
+        base = nivel_desde_cvss(vulnerability.cvss_score) or vulnerability.severity or "medium"
+        resultado = ResultadoPrioridad(nivel_base=base, nivel_final="")
+        _registrar(resultado, "—", "Sin activo asociado: queda pendiente de asociación (no se calcula impacto).", base, "")
+        return resultado
     return calcular_prioridad(
         cvss=vulnerability.cvss_score,
         severidad_declarada=vulnerability.severity,

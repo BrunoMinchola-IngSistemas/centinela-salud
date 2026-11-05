@@ -3,12 +3,15 @@ from rest_framework import serializers
 from vulnerabilities.models import VulnerabilityStatus
 
 from .models import ComplianceAssessment, Control, ControlMapping
+from .services import es_brecha_pendiente, tiene_evidencia
 
 
 class ControlMappingSerializer(serializers.ModelSerializer):
+    framework_display = serializers.CharField(source="get_framework_display", read_only=True)
+
     class Meta:
         model = ControlMapping
-        fields = ["framework", "code"]
+        fields = ["framework", "framework_display", "code"]
 
 
 class ComplianceAssessmentSerializer(serializers.ModelSerializer):
@@ -20,16 +23,20 @@ class ComplianceAssessmentSerializer(serializers.ModelSerializer):
 
 class ControlSerializer(serializers.ModelSerializer):
     """
-    Expone, además de los datos propios del control, un cumplimiento
-    calculado a partir de las vulnerabilidades abiertas/cerradas que
-    tiene asociadas (igual que hace el mockup de la consola).
+    Datos del control + estado de implementación (lo único editable,
+    HU13) + indicadores calculados: puntaje técnico por hallazgos
+    abiertos/cerrados, si tiene evidencia y si es una brecha pendiente
+    (HU11 esc. 2).
     """
 
     mappings = ControlMappingSerializer(many=True, read_only=True)
     theme_display = serializers.CharField(source="get_theme_display", read_only=True)
+    estado_display = serializers.CharField(source="get_estado_implementacion_display", read_only=True)
     compliance_score = serializers.SerializerMethodField()
     open_findings = serializers.SerializerMethodField()
     latest_assessment = serializers.SerializerMethodField()
+    tiene_evidencia = serializers.SerializerMethodField()
+    brecha_pendiente = serializers.SerializerMethodField()
 
     class Meta:
         model = Control
@@ -42,11 +49,21 @@ class ControlSerializer(serializers.ModelSerializer):
             "description",
             "health_rationale",
             "baseline_score",
+            "estado_implementacion",
+            "estado_display",
+            "estado_actualizado_en",
+            "estado_actualizado_por",
+            "madurez_minima",
+            "criticidad",
+            "costo_estimado",
             "mappings",
             "compliance_score",
             "open_findings",
             "latest_assessment",
+            "tiene_evidencia",
+            "brecha_pendiente",
         ]
+        read_only_fields = [f for f in fields if f != "estado_implementacion"]
 
     def get_compliance_score(self, obj):
         linked = obj.vulnerabilities.all()
@@ -61,3 +78,9 @@ class ControlSerializer(serializers.ModelSerializer):
     def get_latest_assessment(self, obj):
         last = obj.assessments.first()
         return ComplianceAssessmentSerializer(last).data if last else None
+
+    def get_tiene_evidencia(self, obj):
+        return tiene_evidencia(obj)
+
+    def get_brecha_pendiente(self, obj):
+        return es_brecha_pendiente(obj)

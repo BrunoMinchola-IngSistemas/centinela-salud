@@ -3,6 +3,7 @@ import uuid
 from django.db import models
 
 from accounts.models import Organization
+from controls.models import Control
 from remediation.models import RemediationPlan
 from vulnerabilities.models import Vulnerability
 
@@ -12,6 +13,13 @@ class EvidenceType(models.TextChoices):
     CONFIGURATION = "configuration", "Configuración"
     SIGNED_RECORD = "signed_record", "Acta firmada"
     OTHER = "other", "Otro"
+
+
+def _ruta_evidencia(instance, filename):
+    # La clave en S3 no lleva el nombre original (podría contener datos
+    # personales): se usa el id de la evidencia y la extensión.
+    extension = filename.rsplit(".", 1)[-1].lower() if "." in filename else "bin"
+    return f"evidencias/{instance.organization_id}/{instance.id}.{extension}"
 
 
 class Evidence(models.Model):
@@ -33,6 +41,12 @@ class Evidence(models.Model):
     plan = models.ForeignKey(
         RemediationPlan, on_delete=models.SET_NULL, null=True, blank=True, related_name="evidence_items"
     )
+    # HU14: evidencia documental de un control (archivo subido por Cumplimiento).
+    control = models.ForeignKey(Control, on_delete=models.SET_NULL, null=True, blank=True, related_name="evidencias")
+    descripcion = models.TextField(blank=True)
+    archivo = models.FileField(upload_to=_ruta_evidencia, max_length=300, blank=True)
+    nombre_original = models.CharField(max_length=255, blank=True)
+    tamano_bytes = models.PositiveIntegerField(null=True, blank=True)
 
     s3_bucket = models.CharField(max_length=150)
     s3_key = models.CharField(max_length=500)

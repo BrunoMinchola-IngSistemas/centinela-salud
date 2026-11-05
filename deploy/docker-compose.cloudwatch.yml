@@ -1,0 +1,18 @@
+# Solo en AWS: envía los logs de los contenedores a CloudWatch Logs.
+# El grupo /centinela/prod se crea en la guía (retención 30 días) y el rol
+# IAM de la EC2 tiene permiso para escribir en él.
+x-logs: &logs
+  logging:
+    driver: awslogs
+    options:
+      awslogs-region: ${AWS_REGION:-us-east-1}
+      awslogs-group: /centinela/prod
+      awslogs-create-group: "false"
+
+services:
+  api:
+    <<: *logs
+  programador:
+    <<: *logs
+  web:
+    <<: *logs

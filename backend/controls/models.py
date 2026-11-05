@@ -9,6 +9,22 @@ class Framework(models.TextChoices):
     ISO27001 = "iso27001", "ISO 27001:2022"
     HIPAA = "hipaa", "HIPAA Security Rule"
     CIS = "cis", "CIS Controls v8"
+    LEY_29733 = "ley29733", "Ley N.° 29733 (Perú)"
+
+
+class EstadoImplementacion(models.TextChoices):
+    """HU13/HU15/HU16: estado del control que marca el Oficial de Cumplimiento."""
+
+    PENDIENTE = "pendiente", "Pendiente"
+    PARCIAL = "parcial", "Parcialmente implementado"
+    IMPLEMENTADO = "implementado", "Implementado"
+    NO_APLICA = "no_aplica", "No aplica"
+
+
+class Nivel3(models.TextChoices):
+    BAJO = "bajo", "Bajo"
+    MEDIO = "medio", "Medio"
+    ALTO = "alto", "Alto"
 
 
 class Control(models.Model):
@@ -41,6 +57,17 @@ class Control(models.Model):
     baseline_score = models.PositiveSmallIntegerField(
         default=70, help_text="Puntaje base de cumplimiento (0-100) antes de ajustar por hallazgos abiertos/cerrados."
     )
+    estado_implementacion = models.CharField(
+        max_length=15, choices=EstadoImplementacion.choices, default=EstadoImplementacion.PENDIENTE
+    )
+    estado_actualizado_en = models.DateTimeField(null=True, blank=True)
+    estado_actualizado_por = models.CharField(max_length=150, blank=True)
+    # HU12/HU15: atributos del catálogo para priorizar y filtrar por madurez.
+    madurez_minima = models.PositiveSmallIntegerField(
+        default=1, help_text="Nivel de madurez (1-5) desde el que es razonable exigir este control."
+    )
+    criticidad = models.CharField(max_length=10, choices=Nivel3.choices, default=Nivel3.MEDIO)
+    costo_estimado = models.CharField(max_length=10, choices=Nivel3.choices, default=Nivel3.MEDIO)
 
     class Meta:
         ordering = ["iso_code", "name"]

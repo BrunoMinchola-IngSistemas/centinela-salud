@@ -8,15 +8,20 @@ from rest_framework import serializers, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from accounts.models import Role
+from accounts.models import User as Perfil
 from evidence.models import Evidence, EvidenceType
 from governance.audit import registrar
-from governance.models import NivelAutonomia
-from vulnerabilities.models import VulnerabilityStatus
+from governance.models import NivelAutonomia, TipoAccion
+from informes.exportar import exportar_tabla
+from vulnerabilities.models import Vulnerability, VulnerabilityStatus
 
 from .models import PlanStatus, RemediationPlan, VerificationAttempt
 from .serializers import RemediationPlanSerializer
 
 DUE_DAYS_BY_SEVERITY = {"critical": 7, "high": 30, "medium": 60, "low": 90}
+ORDEN_PRIORIDAD = ["critical", "high", "medium", "low"]
+ESTADO_TEXTO = {"pending": "Pendiente", "in_progress": "En curso", "in_verification": "En verificación", "closed": "Cerrado"}
 EVIDENCE_S3_BUCKET = os.getenv("EVIDENCE_S3_BUCKET", "centinela-salud-evidencias")
 
 
@@ -45,6 +50,7 @@ class RemediationPlanViewSet(viewsets.ModelViewSet):
     )
     serializer_class = RemediationPlanSerializer
     filterset_fields = ["status"]
+    modulo = "remediacion"
 
     def get_queryset(self):
         profile = getattr(self.request.user, "profile", None)
@@ -148,14 +154,15 @@ class RemediationPlanViewSet(viewsets.ModelViewSet):
             payload = {
                 "plan_id": plan.id,
                 "vulnerability": vulnerability.cve or str(vulnerability.id),
-                "asset": vulnerability.asset.hostname,
+                "asset": vulnerability.asset.hostname if vulnerability.asset else "",
                 "verified_at": timezone.now().isoformat(),
                 "scan_reference": attempt.scan_reference,
             }
             digest = hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
             Evidence.objects.create(
                 organization=vulnerability.organization,
-                name=f"Reescaneo {vulnerability.source.get_source_type_display()} · {vulnerability.asset.hostname}",
+                name=f"Reescaneo {vulnerability.source.get_source_type_display()} · "
+                f"{vulnerability.asset.hostname if vulnerability.asset else 'sin activo'}",
                 evidence_type=EvidenceType.SCAN_REPORT,
                 vulnerability=vulnerability,
                 plan=plan,
@@ -172,3 +179,96 @@ class RemediationPlanViewSet(viewsets.ModelViewSet):
             vulnerability.save(update_fields=["status"])
 
         return Response(RemediationPlanSerializer(plan).data)
+
+
+    # ------------------------------------------------------------- HU17
+
+    @action(detail=False, methods=["post"])
+    def generar(self, request):
+        """
+        HU17: el agente arma el plan de remediación para los hallazgos
+        priorizados que aún no tienen plan: una acción por hallazgo con
+        responsable (el Responsable de TI disponible), plazo según la
+        prioridad y estado "pendiente". Si no hay un responsable
+        disponible, la acción queda como "responsable pendiente de
+        asignación". Al crear cada plan, el agente notifica a TI de forma
+        autónoma (acción de la lista blanca, HU18).
+        """
+        from governance.agente import proponer_accion
+
+        profile = request.user.profile
+        if profile.role not in {Role.ADMIN, Role.COMPLIANCE, Role.IT_OWNER, Role.ANALYST}:
+            raise serializers.ValidationError("Tu rol no puede generar planes de remediación.")
+        minima = request.data.get("prioridad_minima", "low")
+        if minima not in ORDEN_PRIORIDAD:
+            raise serializers.ValidationError({"prioridad_minima": "Usa critical, high, medium o low."})
+        aceptadas = ORDEN_PRIORIDAD[: ORDEN_PRIORIDAD.index(minima) + 1]
+
+        responsable = (
+            Perfil.objects.select_related("user")
+            .filter(organization=profile.organization, role=Role.IT_OWNER, user__is_active=True)
+            .order_by("user__username")
+            .first()
+        )
+        candidatas = (
+            Vulnerability.objects.filter(organization=profile.organization, plan__isnull=True)
+            .exclude(status=VulnerabilityStatus.CLOSED)
+            .select_related("asset")
+        )
+        creados = []
+        for v in sorted(candidatas, key=lambda x: (ORDEN_PRIORIDAD.index(x.contextual_priority) if x.contextual_priority in ORDEN_PRIORIDAD else 1, -x.priority_score)):
+            nivel = v.contextual_priority or v.severity
+            if nivel not in aceptadas and v.contextual_priority:
+                continue
+            plan = RemediationPlan.objects.create(
+                vulnerability=v,
+                owner_name=responsable.user.get_full_name() or responsable.user.username if responsable else "",
+                owner_email=responsable.user.email if responsable else "",
+                due_date=date.today() + timedelta(days=DUE_DAYS_BY_SEVERITY.get(nivel, 30)),
+                notes="Plan generado por el agente a partir de la prioridad contextual.",
+                generado_por_agente=True,
+            )
+            v.status = VulnerabilityStatus.IN_PLAN
+            v.save(update_fields=["status"])
+            registrar(
+                organization=v.organization,
+                actor="agente",
+                accion="plan_generado",
+                modalidad=NivelAutonomia.AUTONOMO,
+                objeto_tipo="vulnerability",
+                objeto_id=v.id,
+                detalle={"pedido_por": request.user.username, "titulo": v.title, "responsable": plan.owner_name or "pendiente",
+                         "plazo": str(plan.due_date)},
+            )
+            proponer_accion(plan, TipoAccion.NOTIFICAR, propuesta_por="agente", detalle="Aviso del plan generado.")
+            creados.append(plan)
+        return Response(
+            {
+                "creados": len(creados),
+                "responsable_disponible": bool(responsable),
+                "planes": RemediationPlanSerializer(creados, many=True, context=self.get_serializer_context()).data,
+            },
+            status=201,
+        )
+
+    @action(detail=False, methods=["get"])
+    def exportar(self, request):
+        """HU17: plan de remediación exportable (?formato=pdf|xlsx|csv)."""
+        planes = self.filter_queryset(self.get_queryset())
+        columnas = ["Acción", "Activo", "Prioridad", "Responsable", "Plazo", "Estado", "Vencido"]
+        filas = [
+            [
+                f"Corregir: {p.vulnerability.title}" + (f" ({p.vulnerability.cve})" if p.vulnerability.cve else ""),
+                p.vulnerability.asset.hostname if p.vulnerability.asset else "Pendiente de asociación",
+                {"critical": "Crítica", "high": "Alta", "medium": "Media", "low": "Baja"}.get(p.vulnerability.contextual_priority, "-"),
+                p.owner_name or "Responsable pendiente de asignación",
+                p.due_date.strftime("%d/%m/%Y"),
+                ESTADO_TEXTO.get(p.status, p.status),
+                "Sí" if p.status != "closed" and p.due_date < date.today() else "No",
+            ]
+            for p in planes
+        ]
+        return exportar_tabla(
+            "plan_remediacion", f"Plan de remediación · {request.user.profile.organization.name}", columnas, filas,
+            request.query_params.get("formato", "pdf"), anchos=(40, 18, 10, 20, 11, 12, 8),
+        )

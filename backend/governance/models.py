@@ -173,3 +173,49 @@ class RegistroAuditoria(models.Model):
         if self.pk and RegistroAuditoria.objects.filter(pk=self.pk).exists():
             raise ValueError("RegistroAuditoria es de solo inserción: no se puede modificar un registro existente.")
         super().save(*args, **kwargs)
+
+
+class EstadoAccion(models.TextChoices):
+    EJECUTADA = "ejecutada", "Ejecutada"
+    PENDIENTE_MANUAL = "pendiente_manual", "Pendiente de ejecución manual (TI)"
+    PENDIENTE_APROBACION = "pendiente_aprobacion", "Esperando aprobación gerencial"
+    RECHAZADA = "rechazada", "Rechazada"
+    DESCARTADA = "descartada", "Descartada"
+
+
+class AccionAgente(models.Model):
+    """
+    HU18 / HU23 / HU24: cada acción de remediación que el agente propone
+    y qué pasó con ella según la política de autonomía:
+
+    - Autónoma (lista blanca) e interruptor encendido -> se ejecuta sola
+      y queda en la auditoría como "autónoma".
+    - Interruptor apagado, o nivel "asistido" -> queda pendiente de que
+      TI la ejecute a mano.
+    - Nivel "con aprobación" -> se crea una SolicitudAprobacion y no se
+      ejecuta hasta que la Gerencia la apruebe.
+
+    Los ejecutores son SIMULADOS (no hay conexión real a AD, firewall ni
+    gestor de parches de la clínica): registran qué harían y lo marcan
+    como simulación en `resultado`.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="acciones_agente")
+    plan = models.ForeignKey(RemediationPlan, on_delete=models.CASCADE, related_name="acciones_agente")
+    tipo_accion = models.CharField(max_length=30, choices=TipoAccion.choices)
+    nivel_aplicado = models.CharField(max_length=20, choices=NivelAutonomia.choices)
+    estado = models.CharField(max_length=25, choices=EstadoAccion.choices)
+    motivo = models.TextField(blank=True, help_text="Por qué quedó en este estado (política, interruptor, aprobación).")
+    detalle = models.TextField(blank=True)
+    solicitud = models.ForeignKey(
+        SolicitudAprobacion, on_delete=models.SET_NULL, null=True, blank=True, related_name="acciones"
+    )
+    propuesta_por = models.CharField(max_length=150, default="agente")
+    ejecutada_por = models.CharField(max_length=150, blank=True)
+    resultado = models.TextField(blank=True)
+    creado_en = models.DateTimeField(auto_now_add=True)
+    ejecutado_en = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-creado_en"]

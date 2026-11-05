@@ -14,7 +14,7 @@ import { pedirPermisoNavegador } from '../alerts'
 import { usePrefs } from '../prefs'
 import './Settings.css'
 
-const ALL = ['admin', 'analyst', 'it_owner', 'auditor']
+const ALL = ['admin', 'analyst', 'it_owner', 'compliance', 'staff', 'auditor']
 
 /**
  * Qué secciones ve cada rol y cuáles puede editar. El Auditor ve las
@@ -25,14 +25,21 @@ const ALL = ['admin', 'analyst', 'it_owner', 'auditor']
 const SECTIONS = [
   { key: 'general', label: 'General', desc: 'Apariencia y notificaciones', icon: IconSettings, roles: ALL, editors: ALL },
   { key: 'cuenta', label: 'Mi cuenta', desc: 'Correo, contraseña y segundo factor', icon: IconUser, roles: ALL, editors: ALL },
-  { key: 'organizacion', label: 'Organización', desc: 'Nombre y RUC de la clínica', icon: IconBuilding, roles: ['admin', 'auditor'], editors: ['admin'] },
+  { key: 'organizacion', label: 'Organización', desc: 'Datos, red, madurez, reportes y escalamiento', icon: IconBuilding, roles: ['admin', 'it_owner', 'compliance', 'auditor'], editors: ['admin', 'it_owner', 'compliance'] },
   { key: 'usuarios', label: 'Usuarios y roles', desc: 'Quién accede y con qué permisos', icon: IconUsers, roles: ['admin', 'auditor'], editors: ['admin'] },
   { key: 'integraciones', label: 'Integraciones', desc: 'Wazuh, OpenVAS, Qwen y fuentes', icon: IconPlug, roles: ['admin', 'it_owner', 'auditor'], editors: ['admin', 'it_owner'] },
   { key: 'autonomia', label: 'Autonomía del agente', desc: 'Qué hace solo y qué requiere aprobación', icon: IconScale, roles: ['admin', 'auditor'], editors: ['admin'] },
   { key: 'auditoria', label: 'Auditoría', desc: 'Quién hizo qué, con filtros', icon: IconList, roles: ['admin', 'auditor'], editors: ['admin', 'auditor'] },
 ]
 
-const ROLE_LABEL = { admin: 'Administrador', analyst: 'Analista de seguridad', it_owner: 'Responsable de TI', auditor: 'Auditor' }
+const ROLE_LABEL = {
+  admin: 'Administrador (Gerencia)',
+  it_owner: 'Responsable de TI',
+  compliance: 'Oficial de Cumplimiento',
+  staff: 'Personal administrativo / clínico',
+  analyst: 'Analista de seguridad',
+  auditor: 'Auditor',
+}
 const ROLE_OPTIONS = Object.entries(ROLE_LABEL).map(([value, label]) => ({ value, label }))
 
 export default function Settings() {
@@ -147,7 +154,7 @@ function AccountSection() {
       </section>
 
       <section className="panel">
-        <div className="ph"><h2>Contraseña</h2><span className="r">Mínimo 8 caracteres</span></div>
+        <div className="ph"><h2>Contraseña</h2><span className="r">Mínimo 10 caracteres, que no sea común ni solo números</span></div>
         <form className="pb settings-form" onSubmit={savePassword}>
           <div className="settings-grid">
             <label className="field"><span>Contraseña actual</span><input type="password" autoComplete="current-password" required value={pw.actual} onChange={set('actual')} /></label>
@@ -162,19 +169,83 @@ function AccountSection() {
         </form>
       </section>
 
-      <section className="panel">
-        <div className="ph"><h2>Segundo factor (MFA)</h2></div>
-        <div className="pb settings-row">
-          <IconShieldCheck size={22} style={{ color: profile.mfa_enabled ? 'var(--ok)' : 'var(--muted)' }} />
+      <MfaSection />
+    </>
+  )
+}
+
+/* --------------------------------------------------------- Segundo factor (HU29) */
+function MfaSection() {
+  const { profile, reloadProfile } = useAuth()
+  const [setup, setSetup] = useState(null)
+  const [code, setCode] = useState('')
+  const [msg, setMsg] = useState(null)
+  const [busy, setBusy] = useState(false)
+
+  async function iniciar() {
+    setMsg(null)
+    setBusy(true)
+    try {
+      setSetup((await auth.mfaStart()).data)
+    } catch (err) {
+      setMsg({ ok: false, text: extractErrorMessage(err) })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function confirmar(e, activar) {
+    e.preventDefault()
+    setMsg(null)
+    setBusy(true)
+    try {
+      if (activar) await auth.mfaActivate(code)
+      else await auth.mfaDeactivate(code)
+      setSetup(null)
+      setCode('')
+      await reloadProfile()
+      setMsg({ ok: true, text: activar ? 'Segundo factor activado. Desde ahora te pedirá el código al ingresar.' : 'Segundo factor desactivado.' })
+    } catch (err) {
+      setMsg({ ok: false, text: extractErrorMessage(err) })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const activo = profile.mfa_enabled
+  return (
+    <section className="panel">
+      <div className="ph"><h2>Segundo factor (MFA)</h2><span className="r">App autenticadora (Google/Microsoft Authenticator, Authy)</span></div>
+      <div className="pb settings-form">
+        <div className="settings-row">
+          <IconShieldCheck size={22} style={{ color: activo ? 'var(--ok)' : 'var(--muted)' }} />
           <div>
-            <b>{profile.mfa_enabled ? 'Activado' : 'No configurado'}</b>
-            <p className="muted">
-              La verificación en dos pasos (HU29) está planificada y todavía no se puede activar desde la consola.
-            </p>
+            <b>{activo ? 'Activado' : 'No activado'}</b>
+            <p className="muted">Además de la contraseña, se pide un código de 6 dígitos que cambia cada 30 segundos. Tras 5 intentos fallidos la cuenta se bloquea 15 minutos.</p>
           </div>
         </div>
-      </section>
-    </>
+        {!activo && !setup && <div className="settings-actions"><button className="btn pri" onClick={iniciar} disabled={busy}>Configurar segundo factor</button></div>}
+        {!activo && setup && (
+          <form onSubmit={(e) => confirmar(e, true)} style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+            <span className="qr-box"><img src={setup.qr} alt="Código QR para la app autenticadora" width="180" height="180" /></span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 220 }}>
+              <span className="small">1. Escanea el QR con tu app. ¿No puedes? Ingresa esta clave: <span className="mono">{setup.secreto}</span></span>
+              <label className="field">2. Escribe el código que muestra la app
+                <input className="mono" inputMode="numeric" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} required />
+              </label>
+              <button className="btn pri" disabled={busy || code.length !== 6}>Activar</button>
+            </div>
+          </form>
+        )}
+        {activo && (
+          <form onSubmit={(e) => confirmar(e, false)} className="row-actions">
+            <input className="mono" inputMode="numeric" placeholder="Código actual" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} required />
+            <button className="btn" disabled={busy || code.length !== 6}>Desactivar segundo factor</button>
+          </form>
+        )}
+        <Msg msg={msg} />
+      </div>
+    </section>
   )
 }
 
@@ -291,8 +362,18 @@ function GeneralSection() {
 }
 
 /* ------------------------------------------------------------- Organización */
+const CAMPOS_POR_ROL = {
+  admin: null,
+  it_owner: ['rango_red', 'ejecucion_autonoma_activa'],
+  compliance: ['nivel_madurez', 'periodicidad_reporte'],
+}
+const MADUREZ = [['', 'Sin registrar'], ['1', '1 · Inicial'], ['2', '2 · Gestionado'], ['3', '3 · Definido'], ['4', '4 · Medido'], ['5', '5 · Optimizado']]
+
 function OrganizationSection({ canEdit }) {
-  const { reloadProfile } = useAuth()
+  const { reloadProfile, profile } = useAuth()
+  const permitidos = CAMPOS_POR_ROL[profile.role]
+  const puede = (campo) => canEdit && (permitidos === null || (permitidos || []).includes(campo))
+  const [miembros, setMiembros] = useState([])
   const [form, setForm] = useState(null)
   const [error, setError] = useState('')
   const [msg, setMsg] = useState(null)
@@ -300,7 +381,19 @@ function OrganizationSection({ canEdit }) {
 
   function load() {
     setError('')
-    organization.get().then((r) => setForm({ name: r.data.name, ruc: r.data.ruc || '' })).catch((err) => setError(extractErrorMessage(err)))
+    organization
+      .get()
+      .then((r) => setForm({
+        name: r.data.name,
+        ruc: r.data.ruc || '',
+        rango_red: r.data.rango_red || '',
+        nivel_madurez: r.data.nivel_madurez ? String(r.data.nivel_madurez) : '',
+        periodicidad_reporte: r.data.periodicidad_reporte || '',
+        responsable_escalamiento: r.data.responsable_escalamiento ? String(r.data.responsable_escalamiento) : '',
+        ejecucion_autonoma_activa: r.data.ejecucion_autonoma_activa,
+      }))
+      .catch((err) => setError(extractErrorMessage(err)))
+    members.list().then((r) => setMiembros(r.data.results ?? r.data)).catch(() => {})
   }
   useEffect(load, [])
 
@@ -309,7 +402,13 @@ function OrganizationSection({ canEdit }) {
     setSaving(true)
     setMsg(null)
     try {
-      await organization.update(form)
+      const payload = {}
+      Object.entries(form).forEach(([k, v]) => {
+        if (!puede(k)) return
+        if (k === 'nivel_madurez' || k === 'responsable_escalamiento') payload[k] = v ? Number(v) : null
+        else payload[k] = v
+      })
+      await organization.update(payload)
       await reloadProfile()
       setMsg({ ok: true, text: 'Datos de la organización guardados.' })
     } catch (err) {
@@ -324,11 +423,32 @@ function OrganizationSection({ canEdit }) {
 
   return (
     <section className="panel">
-      <div className="ph"><h2>Datos de la organización</h2>{!canEdit && <span className="r">Solo el Administrador los edita</span>}</div>
+      <div className="ph"><h2>Datos y ajustes de la organización</h2><span className="r">Cada rol edita lo suyo: Gerencia todo; TI red y autonomía; Cumplimiento madurez y reportes</span></div>
       <form className="pb settings-form" onSubmit={save}>
         <div className="settings-grid">
-          <label className="field"><span>Nombre</span><input required maxLength={150} value={form.name} disabled={!canEdit} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
-          <label className="field"><span>RUC / identificador fiscal</span><input maxLength={20} value={form.ruc} disabled={!canEdit} onChange={(e) => setForm({ ...form, ruc: e.target.value })} /></label>
+          <label className="field"><span>Nombre</span><input required maxLength={150} value={form.name} disabled={!puede('name')} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
+          <label className="field"><span>RUC / identificador fiscal</span><input maxLength={20} value={form.ruc} disabled={!puede('ruc')} onChange={(e) => setForm({ ...form, ruc: e.target.value })} /></label>
+          <label className="field"><span>Rango de red para descubrimiento (HU01)</span><input className="mono" placeholder="10.10.1.0/24" value={form.rango_red} disabled={!puede('rango_red')} onChange={(e) => setForm({ ...form, rango_red: e.target.value })} /></label>
+          <label className="field"><span>Nivel de madurez de seguridad (HU12)</span>
+            <select value={form.nivel_madurez} disabled={!puede('nivel_madurez')} onChange={(e) => setForm({ ...form, nivel_madurez: e.target.value })}>
+              {MADUREZ.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </label>
+          <label className="field"><span>Periodicidad del reporte automático (HU21)</span>
+            <select value={form.periodicidad_reporte} disabled={!puede('periodicidad_reporte')} onChange={(e) => setForm({ ...form, periodicidad_reporte: e.target.value })}>
+              <option value="">Sin configurar</option><option value="semanal">Semanal</option><option value="mensual">Mensual</option>
+            </select>
+          </label>
+          <label className="field"><span>Segundo responsable para escalar aprobaciones (HU24)</span>
+            <select value={form.responsable_escalamiento} disabled={!puede('responsable_escalamiento')} onChange={(e) => setForm({ ...form, responsable_escalamiento: e.target.value })}>
+              <option value="">Automático (primer Responsable de TI)</option>
+              {miembros.map((m) => <option key={m.id} value={m.user_id ?? ''} disabled={!m.user_id}>{m.username} · {m.role_display}</option>)}
+            </select>
+          </label>
+          <label className="field" style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <input type="checkbox" checked={form.ejecucion_autonoma_activa} disabled={!puede('ejecucion_autonoma_activa')} onChange={(e) => setForm({ ...form, ejecucion_autonoma_activa: e.target.checked })} style={{ width: 'auto' }} />
+            <span>Ejecución autónoma de acciones de bajo riesgo (HU18)</span>
+          </label>
         </div>
         <Msg msg={msg} />
         {canEdit && (
@@ -448,7 +568,13 @@ function MembersSection({ canEdit }) {
                           <span className={`role-badge role-${m.role}`}>{m.role_display}</span>
                         )}
                       </td>
-                      <td className="muted">{m.last_login ? new Date(m.last_login).toLocaleString('es-PE') : 'Nunca'}</td>
+                      <td className="muted">
+                        {m.last_login ? new Date(m.last_login).toLocaleString('es-PE') : 'Nunca'}
+                        <div>
+                          {m.mfa_enabled && <span className="badge b-ok" style={{ marginRight: 4 }}>MFA</span>}
+                          {m.bloqueado && <span className="badge b-crit">Bloqueada</span>}
+                        </div>
+                      </td>
                       <td>
                         {editable ? (
                           <button type="button" className={`switch ${m.is_active ? 'on' : ''}`} role="switch" aria-checked={m.is_active} disabled={busy === m.id} title={m.is_active ? 'Desactivar cuenta' : 'Activar cuenta'} aria-label={`${m.is_active ? 'Desactivar' : 'Activar'} ${m.username}`} onClick={() => run(m.id, () => members.setActive(m.id, !m.is_active))}><i /></button>
@@ -458,6 +584,12 @@ function MembersSection({ canEdit }) {
                       </td>
                       {canEdit && (
                         <td style={{ textAlign: 'right' }}>
+                          {editable && (m.bloqueado || m.mfa_enabled) && (
+                            <button className="btn sm" disabled={busy === m.id} title="Desbloquea la cuenta y, si se confirma, quita el segundo factor (p. ej. celular perdido)"
+                              onClick={() => run(m.id, () => members.resetSecurity(m.id, m.mfa_enabled && window.confirm(`¿Quitar también el segundo factor de ${m.username}?`)))}>
+                              Desbloquear
+                            </button>
+                          )}{' '}
                           {editable && (
                             <button className="btn sm" disabled={busy === m.id} onClick={() => { setResetFor(resetFor?.id === m.id ? null : m); setResetPw('') }}>
                               <IconKey size={13} />Clave

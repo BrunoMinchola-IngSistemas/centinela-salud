@@ -102,19 +102,41 @@ class OrganizacionView(APIView):
     El permiso por defecto ya bloquea al Auditor en PATCH.
     """
 
+    modulo = "configuracion"
+
     def get(self, request):
         return Response(OrganizationSerializer(_perfil(request).organization).data)
 
+    # Qué ajustes de la organización puede cambiar cada rol.
+    CAMPOS_POR_ROL = {
+        Role.ADMIN: None,  # todos
+        Role.IT_OWNER: {"rango_red", "ejecucion_autonoma_activa"},  # HU01, HU18
+        Role.COMPLIANCE: {"nivel_madurez", "periodicidad_reporte"},  # HU12, HU21
+    }
+    CAMPOS_AUDITADOS = (
+        "name", "ruc", "rango_red", "nivel_madurez", "periodicidad_reporte", "ejecucion_autonoma_activa",
+        "responsable_escalamiento",
+    )
+
     def patch(self, request):
         profile = _perfil(request)
-        if profile.role != Role.ADMIN:
-            raise PermissionDenied("Solo el rol Administrador puede editar los datos de la organización.")
+        if profile.role not in self.CAMPOS_POR_ROL:
+            raise PermissionDenied("Tu rol no puede editar los ajustes de la organización.")
+        permitidos = self.CAMPOS_POR_ROL[profile.role]
+        if permitidos is not None:
+            ajenos = set(request.data) - permitidos
+            if ajenos:
+                raise PermissionDenied(
+                    f"Tu rol solo puede cambiar: {', '.join(sorted(permitidos))}. No puede cambiar: {', '.join(sorted(ajenos))}."
+                )
         org = profile.organization
         antes = OrganizationSerializer(org).data
         serializer = OrganizationSerializer(org, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        cambios = {k: {"de": antes[k], "a": serializer.data[k]} for k in ("name", "ruc") if antes[k] != serializer.data[k]}
+        cambios = {
+            k: {"de": antes[k], "a": serializer.data[k]} for k in self.CAMPOS_AUDITADOS if antes[k] != serializer.data[k]
+        }
         registrar(
             organization=org,
             actor=request.user.username,
@@ -145,8 +167,17 @@ class MiembroViewSet(
 
     serializer_class = MiembroSerializer
     queryset = Profile.objects.select_related("user").order_by("user__username")
+    modulo = "configuracion"
     pagination_class = None
     http_method_names = ["get", "post", "patch", "head", "options"]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        # El Personal administrativo/clínico no necesita ver el directorio
+        # de la clínica (correos, roles): solo su propia cuenta.
+        if self.request.user.profile.role == Role.STAFF:
+            qs = qs.filter(user=self.request.user)
+        return qs
 
     def check_permissions(self, request):
         super().check_permissions(request)
@@ -193,6 +224,21 @@ class MiembroViewSet(
             self._registrar("rol_cambiado", miembro, {"de": rol_antes, "a": miembro.role})
         if miembro.user.is_active != activo_antes:
             self._registrar("usuario_activado" if miembro.user.is_active else "usuario_desactivado", miembro)
+
+    @action(detail=True, methods=["post"], url_path="restablecer-seguridad")
+    def restablecer_seguridad(self, request, pk=None):
+        """HU29: el Administrador desbloquea una cuenta y/o le quita el segundo factor (celular perdido)."""
+        miembro = self.get_object()
+        self._no_sobre_si_mismo(miembro, "detail")
+        miembro.intentos_fallidos = 0
+        miembro.bloqueado_hasta = None
+        quitar_mfa = str(request.data.get("quitar_mfa", "")).lower() in ("1", "true", "si", "sí")
+        if quitar_mfa:
+            miembro.mfa_enabled = False
+            miembro.mfa_secret = ""
+        miembro.save(update_fields=["intentos_fallidos", "bloqueado_hasta", "mfa_enabled", "mfa_secret"])
+        self._registrar("seguridad_restablecida", miembro, {"quitar_mfa": quitar_mfa})
+        return Response(MiembroSerializer(miembro).data)
 
     @action(detail=True, methods=["post"], url_path="restablecer-clave")
     def restablecer_clave(self, request, pk=None):

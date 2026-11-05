@@ -1,0 +1,19 @@
+# Consola web (React) servida por Caddy, que además:
+# - obtiene y renueva solo el certificado HTTPS (Let's Encrypt),
+# - redirige HTTP -> HTTPS y agrega cabeceras de seguridad,
+# - reenvía /api/* a la API (contenedor "api"), en el MISMO dominio
+#   (sin CORS, cookies y tokens nunca viajan a otro origen).
+FROM node:20-alpine AS build
+WORKDIR /app
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ .
+# Mismo dominio que la API: VITE_API_URL vacío. Cuentas demo ocultas
+# salvo que se construya con --build-arg MOSTRAR_CUENTAS_DEMO=true.
+ARG MOSTRAR_CUENTAS_DEMO=false
+ENV VITE_API_URL= VITE_MOSTRAR_CUENTAS_DEMO=${MOSTRAR_CUENTAS_DEMO}
+RUN npm run build
+
+FROM caddy:2.8-alpine
+COPY deploy/Caddyfile /etc/caddy/Caddyfile
+COPY --from=build /app/dist /srv

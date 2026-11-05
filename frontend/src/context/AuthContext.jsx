@@ -7,10 +7,8 @@ export function AuthProvider({ children }) {
   const [token, setToken] = useState(() => localStorage.getItem('centinela_token'))
   const [profile, setProfile] = useState(null)
 
-  // Quién está conectado (usuario, rol, organización real) se pide
-  // aparte del login: el token por sí solo no dice nada de eso, y
-  // antes la barra superior mostraba "Clínica San Lucas" fijo para
-  // cualquier usuario que entrara.
+  // Quién está conectado (usuario, rol, organización real y módulos a
+  // los que tiene acceso, HU28) se pide aparte del login.
   useEffect(() => {
     if (!token) {
       setProfile(null)
@@ -22,34 +20,62 @@ export function AuthProvider({ children }) {
       .catch(() => setProfile(null))
   }, [token])
 
-  // Configuración cambia correo u organización: se vuelve a pedir el
-  // perfil para que la barra superior y el menú muestren lo nuevo.
   async function reloadProfile() {
     const { data } = await auth.me()
     setProfile(data)
     return data
   }
 
+  function saveToken(key) {
+    localStorage.setItem('centinela_token', key)
+    setToken(key)
+  }
+
+  /**
+   * HU29: si la cuenta tiene segundo factor, el primer paso no entrega
+   * el token sino un `mfa_token`; la pantalla de login pide el código y
+   * llama a verifyMfa. Devuelve { mfaToken } en ese caso.
+   */
   async function login(username, password) {
     const { data } = await auth.login(username, password)
-    localStorage.setItem('centinela_token', data.token)
-    setToken(data.token)
+    if (data.mfa_requerido) return { mfaToken: data.mfa_token }
+    saveToken(data.token)
+    return {}
+  }
+
+  async function verifyMfa(mfaToken, codigo) {
+    const { data } = await auth.loginMfa(mfaToken, codigo)
+    saveToken(data.token)
   }
 
   function logout() {
+    // Se invalida también en el servidor (el token deja de servir).
+    auth.logout().catch(() => {})
     localStorage.removeItem('centinela_token')
     setToken(null)
     setProfile(null)
   }
 
   // El Auditor "ve todo pero no hace nada": el backend ya rechaza sus
-  // escrituras con 403; aquí se usa para deshabilitar los botones de
-  // acción en vez de dejarlo apretar y recibir un error.
+  // escrituras con 403; aquí se usa para deshabilitar los botones.
   const canEdit = profile?.role !== 'auditor'
+  const modules = profile?.modulos
 
   const value = useMemo(
-    () => ({ token, isAuthenticated: Boolean(token), profile, canEdit, login, logout, reloadProfile }),
-    [token, profile, canEdit],
+    () => ({
+      token,
+      isAuthenticated: Boolean(token),
+      profile,
+      canEdit,
+      can: (modulo) => (modules ? modules.includes(modulo) : true),
+      role: profile?.role,
+      login,
+      verifyMfa,
+      logout,
+      reloadProfile,
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [token, profile, canEdit, modules],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

@@ -30,6 +30,7 @@ class AssetViewSet(OrganizationScopedMixin, viewsets.ModelViewSet):
     """
 
     queryset = Asset.objects.all().order_by("hostname")
+    modulo = "activos"
     serializer_class = AssetSerializer
     filter_backends = [DjangoFilterBackend, SearchFilter]
     filterset_fields = ["asset_type", "criticality", "stores_phi", "wazuh_agent_online", "discovery_source"]
@@ -130,4 +131,5 @@ class DiscoveryRunViewSet(OrganizationScopedMixin, mixins.ListModelMixin, mixins
     """Historial de descubrimientos (informes). Solo lectura: se crean con POST /api/assets/descubrir/."""
 
     queryset = DiscoveryRun.objects.all()
+    modulo = "activos"
     serializer_class = DiscoveryRunSerializer

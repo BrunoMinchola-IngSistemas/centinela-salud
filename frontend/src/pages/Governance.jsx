@@ -1,12 +1,21 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { governance, remediationPlans } from '../api/resources'
+import { governance, organization, remediationPlans } from '../api/resources'
 import { EmptyState, ErrorState, LoadingState, extractErrorMessage } from '../components/DataState'
 import Select from '../components/Select'
 
 const NIVEL_BADGE = { autonomo: 'b-ok', asistido: 'b-br', con_aprobacion: 'b-high' }
 const NIVEL_LABEL = { autonomo: 'Autónomo', asistido: 'Asistido', con_aprobacion: 'Con aprobación' }
 const ESTADO_BADGE = { pendiente: 'b-med', aprobada: 'b-ok', rechazada: 'b-crit', escalada: 'b-high' }
+const ACC_BADGE = { ejecutada: 'b-ok', pendiente_manual: 'b-med', pendiente_aprobacion: 'b-high', rechazada: 'b-crit', descartada: 'b-mut' }
+const TIPOS_TODOS = [
+  ['notificar', 'Notificar'],
+  ['abrir_ticket', 'Abrir ticket'],
+  ['desactivar_cuenta', 'Desactivar cuenta inactiva'],
+  ['aplicar_parche', 'Aplicar parche'],
+  ['modificar_config', 'Modificar configuración'],
+  ['aislar_servidor', 'Aislar servidor de producción'],
+]
 const TIPOS = [
   ['aislar_servidor', 'Aislar servidor de producción'],
   ['aplicar_parche', 'Aplicar parche'],
@@ -23,6 +32,9 @@ const TIPOS = [
 export default function Governance() {
   const { profile, canEdit } = useAuth()
   const isAdmin = profile?.role === 'admin'
+  const puedeEjecutar = canEdit && ['admin', 'it_owner'].includes(profile?.role)
+  const [acciones, setAcciones] = useState([])
+  const [org, setOrg] = useState(null)
 
   const [policies, setPolicies] = useState([])
   const [requests, setRequests] = useState([])
@@ -36,10 +48,12 @@ export default function Governance() {
   function load() {
     setLoading(true)
     setError('')
-    Promise.all([governance.policies(), governance.requests()])
-      .then(([p, r]) => {
+    Promise.all([governance.policies(), governance.requests(), governance.actions(), organization.get()])
+      .then(([p, r, a, o]) => {
         setPolicies(p.data.results ?? p.data)
         setRequests(r.data.results ?? r.data)
+        setAcciones(a.data.results ?? a.data)
+        setOrg(o.data)
       })
       .catch((err) => setError(extractErrorMessage(err)))
       .finally(() => setLoading(false))
@@ -71,8 +85,33 @@ export default function Governance() {
     }
   }
 
-  const pending = requests.filter((r) => r.estado === 'pendiente')
-  const decided = requests.filter((r) => r.estado !== 'pendiente')
+  async function toggleAutonomia() {
+    setActionError('')
+    try {
+      await organization.update({ ejecucion_autonoma_activa: !org.ejecucion_autonoma_activa })
+      load()
+    } catch (err) {
+      setActionError(extractErrorMessage(err))
+    }
+  }
+
+  async function accion(id, ejecutar) {
+    setBusy(id)
+    setActionError('')
+    try {
+      if (ejecutar) await governance.runAction(id)
+      else await governance.discardAction(id, '')
+      load()
+    } catch (err) {
+      setActionError(extractErrorMessage(err))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const pending = requests.filter((r) => r.estado === 'pendiente' || r.estado === 'escalada')
+  const decided = requests.filter((r) => r.estado !== 'pendiente' && r.estado !== 'escalada')
+  const puedeDecidir = (r) => isAdmin || (r.estado === 'escalada' && r.escalado_a === profile?.username)
 
   return (
     <div>
@@ -116,9 +155,19 @@ export default function Governance() {
               </tbody>
             </table>
             <div className="pb" style={{ fontSize: 12.5, color: 'var(--muted)', borderTop: '1px solid var(--line)' }}>
-              <b>Autónomo:</b> el agente lo hace y lo registra. <b>Asistido:</b> el agente recomienda, TI ejecuta.{' '}
+              <b>Autónomo:</b> el agente lo hace y lo registra (solo la lista blanca de bajo riesgo). <b>Asistido:</b> el agente recomienda, TI ejecuta.{' '}
               <b>Con aprobación:</b> no se hace nada sin el visto bueno de Gerencia.
             </div>
+            {org && (
+              <div className="pb" style={{ borderTop: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ flex: 1 }}>
+                  <b>Ejecución autónoma</b>{' '}
+                  <span className={`badge ${org.ejecucion_autonoma_activa ? 'b-ok' : 'b-crit'}`}>{org.ejecucion_autonoma_activa ? 'Activada' : 'Desactivada'}</span>
+                  <div className="muted small">Si se desactiva, el agente no ejecuta nada solo: todo queda pendiente de TI.</div>
+                </span>
+                {puedeEjecutar && <button className="btn sm" onClick={toggleAutonomia}>{org.ejecucion_autonoma_activa ? 'Desactivar' : 'Activar'}</button>}
+              </div>
+            )}
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -130,6 +179,7 @@ export default function Governance() {
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                     <b>{r.tipo_accion_display}</b>
                     <span className="badge b-mut">{r.vulnerability_title}</span>
+                    {r.estado === 'escalada' && <span className="badge b-high">Escalada a {r.escalado_a}</span>}
                     <span style={{ marginLeft: 'auto', color: 'var(--muted)', fontSize: 12 }}>
                       Plazo: {new Date(r.plazo).toLocaleString('es-PE')}
                     </span>
@@ -144,7 +194,7 @@ export default function Governance() {
                       {r.efecto_esperado}
                     </div>
                   </div>
-                  {isAdmin ? (
+                  {puedeDecidir(r) && canEdit ? (
                     <div style={{ display: 'flex', gap: 6 }}>
                       <input
                         placeholder="Comentario (opcional)"
@@ -160,6 +210,34 @@ export default function Governance() {
                   )}
                 </div>
               ))}
+            </div>
+
+            <div className="panel" style={{ overflowX: 'auto' }}>
+              <div className="ph"><b>Acciones del agente</b><span className="r">según la política de autonomía</span></div>
+              {acciones.length === 0 ? <EmptyState message="El agente aún no propuso acciones." /> : (
+                <table>
+                  <thead><tr><th>Acción</th><th>Hallazgo</th><th>Estado</th><th>Resultado</th><th /></tr></thead>
+                  <tbody>
+                    {acciones.map((a) => (
+                      <tr key={a.id}>
+                        <td>{a.tipo_accion_display}<div className="muted small">{a.nivel_display}</div></td>
+                        <td className="small">{a.vulnerability_title}</td>
+                        <td><span className={`badge ${ACC_BADGE[a.estado]}`}>{a.estado_display}</span><div className="muted small">{a.motivo}</div></td>
+                        <td className="small">{a.resultado || '—'}{a.ejecutada_por && <div className="muted">por {a.ejecutada_por}{a.ejecutado_en ? ` · ${new Date(a.ejecutado_en).toLocaleString('es-PE')}` : ''}</div>}</td>
+                        <td style={{ whiteSpace: 'nowrap' }}>
+                          {a.estado === 'pendiente_manual' && puedeEjecutar && (
+                            <>
+                              <button className="btn sm pri" disabled={busy === a.id} onClick={() => accion(a.id, true)}>Ejecutar</button>{' '}
+                              <button className="btn sm" disabled={busy === a.id} onClick={() => accion(a.id, false)}>Descartar</button>
+                            </>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              {canEdit && <ProponerAccion onDone={load} />}
             </div>
 
             <div className="panel">
@@ -264,6 +342,40 @@ function RequestForm({ onDone }) {
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end' }}>
         <button className="btn pri" disabled={saving}>{saving ? 'Enviando…' : 'Enviar a Gerencia'}</button>
       </div>
+    </form>
+  )
+}
+
+function ProponerAccion({ onDone }) {
+  const [plans, setPlans] = useState([])
+  const [plan, setPlan] = useState('')
+  const [tipo, setTipo] = useState('notificar')
+  const [msg, setMsg] = useState('')
+  useEffect(() => {
+    remediationPlans.list().then((res) => setPlans((res.data.results ?? res.data).filter((p) => p.status !== 'closed'))).catch(() => {})
+  }, [])
+  async function proponer(e) {
+    e.preventDefault()
+    setMsg('')
+    try {
+      const { data } = await governance.proposeAction(plan, tipo, '')
+      setMsg(`${data.tipo_accion_display}: ${data.estado_display}. ${data.motivo}`)
+      onDone()
+    } catch (err) {
+      setMsg(extractErrorMessage(err))
+    }
+  }
+  return (
+    <form className="pb row-actions" onSubmit={proponer} style={{ borderTop: '1px solid var(--line)' }}>
+      <select required value={plan} onChange={(e) => setPlan(e.target.value)} style={{ flex: 1, minWidth: 180 }}>
+        <option value="">Plan de corrección…</option>
+        {plans.map((p) => <option key={p.id} value={p.id}>{p.vulnerability_detail?.title}</option>)}
+      </select>
+      <select value={tipo} onChange={(e) => setTipo(e.target.value)}>
+        {TIPOS_TODOS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+      </select>
+      <button className="btn sm">Proponer acción al agente</button>
+      {msg && <div className="note" style={{ width: '100%' }}>{msg}</div>}
     </form>
   )
 }

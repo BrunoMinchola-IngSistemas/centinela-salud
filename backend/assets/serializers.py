@@ -76,7 +76,6 @@ class DescubrirSerializer(serializers.Serializer):
     fuente = serializers.ChoiceField(choices=[DiscoverySource.RED_LOCAL, DiscoverySource.WAZUH])
     objetivo = serializers.CharField(required=False, allow_blank=True, default="")
 
-    def validate(self, data):
-        if data["fuente"] == DiscoverySource.RED_LOCAL and not data.get("objetivo"):
-            raise serializers.ValidationError({"objetivo": "Indica el rango de red a barrer (por ejemplo 192.168.1.0/24)."})
-        return data
+    # HU01: si no se indica objetivo se usa el rango configurado de la
+    # organización; si tampoco hay, la vista responde "Debe configurar un
+    # rango de red antes de iniciar el descubrimiento".

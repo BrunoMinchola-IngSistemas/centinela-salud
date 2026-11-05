@@ -119,7 +119,7 @@ function Discovery({ canRun }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [fuente, setFuente] = useState('red_local')
-  const [objetivo, setObjetivo] = useState('192.168.1.0/24')
+  const [objetivo, setObjetivo] = useState('')
   const [running, setRunning] = useState(false)
   const [msg, setMsg] = useState(null)
   const [open, setOpen] = useState(null)
@@ -171,8 +171,8 @@ function Discovery({ canRun }) {
             </div>
             {fuente === 'red_local' && (
               <label className="field">
-                <span>Rango de red (CIDR)</span>
-                <input required value={objetivo} onChange={(e) => setObjetivo(e.target.value)} placeholder="192.168.1.0/24" className="mono" />
+                <span>Rango de red (CIDR) · vacío = el configurado en Configuración › Organización</span>
+                <input value={objetivo} onChange={(e) => setObjetivo(e.target.value)} placeholder="Rango configurado (p. ej. 10.10.1.0/24)" className="mono" />
               </label>
             )}
             {msg && <div className={msg.ok ? 'alert-ok' : 'alert-err'} style={{ margin: 0 }}>{msg.text}</div>}
@@ -197,7 +197,7 @@ function Discovery({ canRun }) {
             <tbody>
               {runs.map((r) => (
                 <Fragment key={r.id}>
-                  <tr className={`row ${open === r.id ? 'sel' : ''}`} onClick={() => setOpen(open === r.id ? null : r.id)}>
+                  <tr className={`row ${open === r.id ? 'selected' : ''}`} onClick={() => setOpen(open === r.id ? null : r.id)}>
                     <td className="mono" style={{ whiteSpace: 'nowrap' }}>{new Date(r.started_at).toLocaleString('es-PE')}</td>
                     <td>{r.source_display}</td>
                     <td className="mono">{r.target || '—'}</td>

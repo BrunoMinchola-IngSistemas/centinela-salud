@@ -23,6 +23,7 @@ import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
 
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
@@ -53,6 +54,30 @@ class ObjetivoInvalido(ValueError):
     pass
 
 
+MENSAJE_SIN_RANGO = "Debe configurar un rango de red antes de iniciar el descubrimiento"
+
+
+def avisar_activo_nuevo(organization, asset, origen="el descubrimiento de red"):
+    """HU05: aviso inmediato a TI (y Gerencia) cuando aparece un activo que no estaba en el inventario."""
+    from notificaciones.models import NivelNotificacion, TipoNotificacion
+    from notificaciones.servicios import notificar
+
+    notificar(
+        organization=organization,
+        tipo=TipoNotificacion.ACTIVO_NUEVO,
+        nivel=NivelNotificacion.ADVERTENCIA,
+        titulo=f"Activo nuevo detectado: {asset.hostname}",
+        mensaje=(
+            f"{origen.capitalize()} encontró un activo que no estaba en el inventario "
+            f"({asset.hostname}{', IP ' + str(asset.ip_address) if asset.ip_address else ''}). "
+            "Revisa su tipo, criticidad y si guarda datos clínicos."
+        ),
+        enlace="/activos",
+        objeto_tipo="asset",
+        objeto_id=asset.id,
+    )
+
+
 def validar_cidr(objetivo: str) -> ipaddress.IPv4Network:
     try:
         red = ipaddress.ip_network(objetivo.strip(), strict=False)
@@ -60,6 +85,10 @@ def validar_cidr(objetivo: str) -> ipaddress.IPv4Network:
         raise ObjetivoInvalido("Indica un rango válido, por ejemplo 192.168.1.0/24.") from exc
     if red.version != 4:
         raise ObjetivoInvalido("Por ahora solo se barren rangos IPv4.")
+    if not red.is_private:
+        # Seguridad: el agente solo barre la red interna de la clínica,
+        # nunca direcciones públicas de terceros.
+        raise ObjetivoInvalido("Solo se permiten rangos de red privados (10.x, 172.16-31.x, 192.168.x).")
     if red.num_addresses > MAX_HOSTS:
         raise ObjetivoInvalido(f"El rango es demasiado grande: máximo /24 ({MAX_HOSTS} direcciones) por ejecución.")
     return red
@@ -158,6 +187,8 @@ def _conciliar(organization, fuente: str, hosts: list[HostEncontrado], red: ipad
         asset.reachable = host.online
         asset.last_discovered_at = ahora
         asset.save()
+        if nuevo:
+            avisar_activo_nuevo(organization, asset)
         vistos_ids.add(asset.id)
         detalle.append({**asdict(host), "nuevo": nuevo, "activo_id": str(asset.id), "activo": asset.hostname})
 
@@ -178,6 +209,14 @@ def _conciliar(organization, fuente: str, hosts: list[HostEncontrado], red: ipad
 def ejecutar_descubrimiento(*, organization, fuente: str, objetivo: str, actor: str) -> DiscoveryRun:
     red = None
     if fuente == DiscoverySource.RED_LOCAL:
+        if not getattr(settings, "DESCUBRIMIENTO_RED_HABILITADO", True):
+            raise ObjetivoInvalido(
+                "El barrido de red está deshabilitado en este servidor (nube): desde AWS no se ve la red de la clínica. "
+                "Usa la fuente Wazuh o ejecuta el descubrimiento desde un equipo dentro de la clínica."
+            )
+        objetivo = (objetivo or organization.rango_red or "").strip()
+        if not objetivo:
+            raise ObjetivoInvalido(MENSAJE_SIN_RANGO)
         red = validar_cidr(objetivo)
         objetivo = str(red)
     elif fuente == DiscoverySource.WAZUH:

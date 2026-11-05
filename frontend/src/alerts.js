@@ -17,7 +17,7 @@ export function useAlertPolling(profile) {
   const baseline = useRef(null)
 
   useEffect(() => {
-    if (!profile || !n.intervalMin || (!n.inApp && !n.browser)) return undefined
+    if (!profile || !profile.modulos?.includes('panel') || !n.intervalMin || (!n.inApp && !n.browser)) return undefined
     let cancelled = false
 
     async function check() {

@@ -2,58 +2,71 @@ import { useEffect, useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import {
-  IconAlert, IconBook, IconBrain, IconBug, IconCalendar, IconCheckCircle, IconClock, IconExternal,
-  IconFolder, IconGrid, IconKanban, IconList, IconScale, IconServer, IconSettings, IconShield,
+  IconAlert, IconBook, IconBrain, IconBug, IconCalendar, IconChat, IconCheckCircle, IconClock, IconExternal,
+  IconFileText, IconFolder, IconGauge, IconGrid, IconHistory, IconKanban, IconList, IconMatrix, IconPlug,
+  IconScale, IconServer, IconSettings, IconShield,
 } from '../components/Icons'
+import NotificationBell from '../components/NotificationBell'
 import UserMenu from '../components/UserMenu'
 import { Toaster } from '../components/Toasts'
 import { useAlertPolling } from '../alerts'
 import { useTheme } from '../theme'
 import './AppShell.css'
 
+// HU28: cada opción pertenece a un módulo; el menú muestra solo los
+// módulos del rol (lista que manda el backend en /api/auth/me/).
 const NAV = [
+  {
+    group: 'Gerencia',
+    items: [{ to: '/ejecutivo', label: 'Cuadro ejecutivo', icon: IconGauge, modulo: 'ejecutivo' }],
+  },
   {
     group: 'Operación',
     items: [
-      { to: '/', label: 'Panel general', end: true, icon: IconGrid },
-      { to: '/vulnerabilidades', label: 'Vulnerabilidades', icon: IconBug },
-      { to: '/plan', label: 'Plan de corrección', icon: IconKanban },
-      { to: '/verificacion', label: 'Verificación', icon: IconCheckCircle },
+      { to: '/', label: 'Panel general', end: true, icon: IconGrid, modulo: 'panel' },
+      { to: '/vulnerabilidades', label: 'Vulnerabilidades', icon: IconBug, modulo: 'vulnerabilidades' },
+      { to: '/riesgos', label: 'Matriz de riesgos', icon: IconMatrix, modulo: 'riesgos' },
+      { to: '/historial', label: 'Historial y tendencia', icon: IconHistory, modulo: 'vulnerabilidades' },
+      { to: '/plan', label: 'Plan de corrección', icon: IconKanban, modulo: 'remediacion' },
+      { to: '/verificacion', label: 'Verificación', icon: IconCheckCircle, modulo: 'remediacion' },
+      { to: '/asistente', label: 'Asistente', icon: IconChat, modulo: 'asistente' },
     ],
   },
   {
     group: 'Cumplimiento',
     items: [
-      { to: '/controles', label: 'Controles ISO 27001', icon: IconBook },
-      { to: '/evidencias', label: 'Evidencias', icon: IconFolder },
+      { to: '/controles', label: 'Controles ISO 27001', icon: IconBook, modulo: 'controles' },
+      { to: '/evidencias', label: 'Evidencias', icon: IconFolder, modulo: 'evidencias' },
+      { to: '/reportes', label: 'Reportes', icon: IconFileText, modulo: 'informes' },
     ],
   },
   {
     group: 'Gobernanza',
     items: [
-      { to: '/gobernanza', label: 'Aprobaciones y autonomía', icon: IconScale },
-      { to: '/auditoria', label: 'Registro de auditoría', icon: IconList },
+      { to: '/gobernanza', label: 'Aprobaciones y autonomía', icon: IconScale, modulo: 'gobernanza' },
+      { to: '/auditoria', label: 'Registro de auditoría', icon: IconList, modulo: 'auditoria' },
     ],
   },
   {
     group: 'Personal',
-    items: [{ to: '/incidentes', label: 'Reportar incidente', icon: IconAlert }],
+    items: [{ to: '/incidentes', label: 'Reportar incidente', icon: IconAlert, modulo: 'incidentes' }],
   },
   {
-    group: 'Inventario',
-    items: [{ to: '/activos', label: 'Activos', icon: IconServer }],
+    group: 'Inventario y datos',
+    items: [
+      { to: '/activos', label: 'Activos', icon: IconServer, modulo: 'activos' },
+      { to: '/fuentes', label: 'Fuentes y CVE', icon: IconPlug, modulo: 'integraciones' },
+    ],
   },
   {
     group: 'Sistema',
-    items: [{ to: '/configuracion', label: 'Configuración', icon: IconSettings }],
+    items: [{ to: '/configuracion', label: 'Configuración', icon: IconSettings, modulo: 'configuracion' }],
   },
 ]
 
-// API_BASE: en desarrollo el frontend habla con el backend a través
-// del proxy de Vite (rutas relativas /api/...), pero el admin de
-// Django vive aparte en el puerto 8000, así que ese enlace sí necesita
-// la URL completa.
-const DJANGO_ADMIN_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000') + '/admin/'
+// El admin de Django: en desarrollo vive en el puerto 8000; en la nube,
+// si está habilitado, en el mismo dominio (Caddy reenvía /admin/).
+const DJANGO_ADMIN_URL = import.meta.env.DEV ? 'http://localhost:8000/admin/' : `${import.meta.env.VITE_API_URL || ''}/admin/`
 
 // Reloj de la barra superior: se actualiza cada segundo mientras la
 // consola esté abierta, como en un centro de operaciones.
@@ -67,7 +80,7 @@ function useClock() {
 }
 
 export default function AppShell() {
-  const { logout, profile } = useAuth()
+  const { logout, profile, can } = useAuth()
   const [theme, setTheme] = useTheme()
   const now = useClock()
   useAlertPolling(profile)
@@ -77,7 +90,8 @@ export default function AppShell() {
   }
 
   const orgName = profile?.organization?.name || 'Cargando organización…'
-  const isAdmin = profile?.role === 'admin'
+  const isAdmin = Boolean(profile?.admin_django)
+  const grupos = NAV.map((g) => ({ ...g, items: g.items.filter((i) => can(i.modulo)) })).filter((g) => g.items.length)
 
   const time = now.toLocaleTimeString('es-PE', { hour12: false })
   const date = now.toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -94,7 +108,7 @@ export default function AppShell() {
         </div>
 
         <div className="nav-groups">
-          {NAV.map((group) => (
+          {grupos.map((group) => (
             <div key={group.group} className="nav-group">
               <div className="grp">{group.group}</div>
               {group.items.map((item) => {
@@ -126,7 +140,7 @@ export default function AppShell() {
           </div>
           <div className="engine-icon"><IconBrain size={30} /></div>
           <b>ACTIVO</b>
-          <small>Qwen local · datos de ejemplo</small>
+          <small>Reglas R1-R5 · SVM · Qwen</small>
         </div>
       </aside>
 
@@ -143,6 +157,7 @@ export default function AppShell() {
             <span className="svc"><i className="dot" />Wazuh</span>
             <span className="svc"><i className="dot" />OpenVAS</span>
           </div>
+          <NotificationBell />
           <UserMenu profile={profile} theme={theme} onToggleTheme={toggleTheme} onLogout={logout} />
         </div>
       </header>

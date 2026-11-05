@@ -1,10 +1,17 @@
 """
-Cliente hacia Qwen corriendo localmente en la sede de la PyME (vía
-Ollama o vLLM). La API en AWS llama a este módulo; este módulo es el
-único punto que sale por la VPN hacia la red interna de la clínica.
+Cliente hacia el modelo de lenguaje Qwen. Tres modos (QWEN_PROVIDER):
 
-Nada de esto envía datos de pacientes a un servicio de terceros: el
-modelo vive dentro de la red del cliente.
+- "ollama"  : Qwen en la sede de la PyME (Ollama/vLLM, API /api/generate).
+              Los datos no salen de la red de la clínica.
+- "bedrock" : Qwen3 servido por Amazon Bedrock en la misma cuenta y
+              región de AWS donde corre la consola (rol IAM de la EC2,
+              sin claves en el código). QWEN_MODEL = id del modelo en
+              Bedrock (verificar en la consola de Bedrock de la región).
+- "ninguno" : sin LLM. Todo lo que depende de la IA generativa responde
+              con su alternativa determinista (reglas), sin esperar.
+
+Si el proveedor falla, se usa la respuesta de reserva: la consola nunca
+se cuelga esperando al modelo (timeouts cortos).
 """
 
 import json
@@ -16,9 +23,15 @@ import requests
 
 logger = logging.getLogger(__name__)
 
+QWEN_PROVIDER = os.getenv("QWEN_PROVIDER", "ollama").strip().lower()
 QWEN_API_URL = os.getenv("QWEN_API_URL", "http://qwen-local:11434")
 QWEN_MODEL = os.getenv("QWEN_MODEL", "qwen2.5:14b")
-REQUEST_TIMEOUT = 30
+AWS_REGION = os.getenv("AWS_REGION", os.getenv("AWS_DEFAULT_REGION", "us-east-1"))
+REQUEST_TIMEOUT = (3, 60)  # (conexión, lectura) en segundos
+
+
+def disponible():
+    return QWEN_PROVIDER in ("ollama", "bedrock") and (QWEN_PROVIDER == "bedrock" or bool(QWEN_API_URL))
 
 
 @dataclass
@@ -35,14 +48,28 @@ class AIAssessment:
     recommendation: str
 
 
+def _call_bedrock(prompt: str) -> str:
+    import boto3
+
+    cliente = boto3.client("bedrock-runtime", region_name=AWS_REGION)
+    resp = cliente.converse(
+        modelId=QWEN_MODEL,
+        messages=[{"role": "user", "content": [{"text": prompt}]}],
+        inferenceConfig={"maxTokens": 900, "temperature": 0.2},
+    )
+    return resp["output"]["message"]["content"][0]["text"]
+
+
 def _call_qwen(prompt: str) -> str:
     """
-    Hace la llamada HTTP real al modelo local (API estilo Ollama
-    /api/generate). Si el servicio no está disponible -por ejemplo en
-    un entorno de desarrollo sin GPU- cae a una respuesta de reserva
-    para no romper el flujo del resto de la aplicación.
+    Llama al proveedor configurado. Si no hay proveedor o falla,
+    devuelve "" y quien llama usa su respuesta de reserva.
     """
+    if QWEN_PROVIDER == "ninguno":
+        return ""
     try:
+        if QWEN_PROVIDER == "bedrock":
+            return _call_bedrock(prompt)
         resp = requests.post(
             f"{QWEN_API_URL}/api/generate",
             json={"model": QWEN_MODEL, "prompt": prompt, "stream": False},
@@ -50,8 +77,8 @@ def _call_qwen(prompt: str) -> str:
         )
         resp.raise_for_status()
         return resp.json().get("response", "")
-    except requests.RequestException:
-        logger.warning("Qwen local no disponible en %s; usando respuesta de reserva.", QWEN_API_URL)
+    except Exception:  # noqa: BLE001 - cualquier fallo del LLM cae a la reserva
+        logger.warning("Qwen (%s) no disponible; usando respuesta de reserva.", QWEN_PROVIDER)
         return ""
 
 
@@ -66,15 +93,18 @@ def analyze_vulnerability(vulnerability) -> VulnerabilityAnalysis:
     responde en el formato esperado.
     """
     asset = vulnerability.asset
+    activo = (
+        f"{asset.hostname} ({asset.get_asset_type_display()}, {asset.operating_system})" if asset else "sin activo asociado"
+    )
     prompt = (
         "Eres un analista de ciberseguridad para una clínica. Analiza esta vulnerabilidad "
         "y responde en JSON con las claves summary, steps (lista) y rollback_risk.\n\n"
         f"CVE: {vulnerability.cve or 'sin CVE'}\n"
         f"Título: {vulnerability.title}\n"
         f"CVSS: {vulnerability.cvss_score}\n"
-        f"Activo: {asset.hostname} ({asset.get_asset_type_display()}, {asset.operating_system})\n"
-        f"¿Almacena datos de pacientes?: {'sí' if asset.stores_phi else 'no'}\n"
-        f"Criticidad del activo: {asset.get_criticality_display()}\n"
+        f"Activo: {activo}\n"
+        f"¿Almacena datos de pacientes?: {'sí' if asset and asset.stores_phi else 'no'}\n"
+        f"Criticidad del activo: {asset.get_criticality_display() if asset else 'desconocida'}\n"
     )
     raw = _call_qwen(prompt)
     try:
@@ -88,8 +118,8 @@ def analyze_vulnerability(vulnerability) -> VulnerabilityAnalysis:
     except (ValueError, TypeError):
         return VulnerabilityAnalysis(
             summary=(
-                "Qwen no está disponible en este entorno. Conecta QWEN_API_URL a la instancia "
-                "local para obtener un análisis real de este hallazgo."
+                "El modelo de lenguaje (Qwen) no está disponible en este entorno. Configura QWEN_PROVIDER "
+                "(ollama en la sede o bedrock en AWS) para obtener un análisis generado de este hallazgo."
             ),
             steps=[],
             rollback_risk="",
@@ -105,7 +135,7 @@ def simplify_explanation(vulnerability) -> str:
 def clinical_impact(vulnerability) -> str:
     prompt = (
         f"En un párrafo breve, explica el impacto clínico u operativo si se explota: "
-        f"{vulnerability.title} en el activo {vulnerability.asset.hostname}."
+        f"{vulnerability.title} en el activo {vulnerability.asset.hostname if vulnerability.asset else 'aún no identificado'}."
     )
     return _call_qwen(prompt) or "Análisis no disponible: conecta Qwen local para generar esta explicación."
 
@@ -134,7 +164,7 @@ def priority_score(vulnerability) -> int:
     cvss = float(vulnerability.cvss_score or 0)
     epss = float(vulnerability.epss_score or 0)
     crit_weight = {"critical": 1.0, "high": 0.75, "medium": 0.5, "low": 0.25}.get(
-        vulnerability.asset.criticality, 0.5
+        vulnerability.asset.criticality if vulnerability.asset else "medium", 0.5
     )
     raw = (cvss / 10 * 55) + (epss * 30) + (crit_weight * 15)
     return round(min(100, max(0, raw)))
